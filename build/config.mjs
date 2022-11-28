@@ -1,6 +1,6 @@
 const config = {
   version: '',
-  setVersion(vnum) {this.version = `/* Tabulator v${vnum} (c) Oliver Folkerd <%= moment().format('YYYY') %> */`},
+  setVersion(vnum) {this.version = '/* Tabulator v' + vnum + " (c) Oliver Folkerd <%= moment().format('YYYY') %> */"},
   sourcemaps:false,
   create:{
     minified:false,
@@ -15,6 +15,6 @@ const config = {
   }
 }
 
-config.ignore.CIRCULAR_DEPENDENCY = function(warn) { return config.ignore.ignoreCircular.some(file => warn.importer.includes(file))}
+config.ignore.CIRCULAR_DEPENDENCY = function(warn) { return config.ignore.ignoreCircular.some(file => warn?.importer?.includes(file))}
 
 export default config

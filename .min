@@ -6602,7 +6602,7 @@
 
   var TableRegistry$1 = TableRegistry;
 
-  class Popup$2 extends CoreFeature{
+  let Popup$2 = class Popup extends CoreFeature{
     constructor(table, element, parent){
       super(table);
       
@@ -6903,7 +6903,7 @@
       
       return this.childPopup;
     }
-  }
+  };
 
   class Module extends CoreFeature{
     
@@ -12024,7 +12024,7 @@
     return input;
   }
 
-  class Edit$2{
+  let Edit$2 = class Edit{
     constructor(editor, cell, onRendered, success, cancel, editorParams){
       this.edit = editor;
       this.table = editor.table;
@@ -13041,7 +13041,7 @@
       }
     }
     
-  }
+  };
 
   function select(cell, onRendered, success, cancel, editorParams){
 
