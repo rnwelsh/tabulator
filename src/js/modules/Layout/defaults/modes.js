@@ -4,9 +4,9 @@ import fitDataStretch from './modes/fitDataStretch.js';
 import fitColumns from './modes/fitColumns.js';
 
 export default {
-	fitData:fitData,
-	fitDataFill:fitDataGeneral,
-	fitDataTable:fitDataGeneral,
-	fitDataStretch:fitDataStretch,
-	fitColumns:fitColumns ,
+  fitData:fitData,
+  fitDataFill:fitDataGeneral,
+  fitDataTable:fitDataGeneral,
+  fitDataStretch:fitDataStretch,
+  fitColumns:fitColumns ,
 };

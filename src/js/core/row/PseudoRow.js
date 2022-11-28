@@ -1,45 +1,45 @@
 export default class PseudoRow {
 
-	constructor (type){
-		this.type = type;
-		this.element = this._createElement();
-	}
+  constructor (type){
+    this.type = type;
+    this.element = this._createElement();
+  }
 
-	_createElement(){
-		var el = document.createElement("div");
-		el.classList.add("tabulator-row");
-		return el;
-	}
+  _createElement(){
+    var el = document.createElement("div");
+    el.classList.add("tabulator-row");
+    return el;
+  }
 
-	getElement(){
-		return this.element;
-	}
+  getElement(){
+    return this.element;
+  }
 
-	getComponent(){
-		return false;
-	}
+  getComponent(){
+    return false;
+  }
 
-	getData(){
-		return {};
-	}
+  getData(){
+    return {};
+  }
 
-	getHeight(){
-		return this.element.outerHeight;
-	}
+  getHeight(){
+    return this.element.outerHeight;
+  }
 
-	initialize(){}
+  initialize(){}
 
-	reinitialize(){}
+  reinitialize(){}
 
-	normalizeHeight(){}
+  normalizeHeight(){}
 
-	generateCells(){}
+  generateCells(){}
 
-	reinitializeHeight(){}
+  reinitializeHeight(){}
 
-	calcHeight(){}
+  calcHeight(){}
 
-	setCellHeight(){}
+  setCellHeight(){}
 
-	clearCellHeight(){}
+  clearCellHeight(){}
 }

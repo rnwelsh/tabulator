@@ -10,6 +10,11 @@
   -ms-transform: translateZ(0);
   -o-transform: translateZ(0);
   transform: translateZ(0);
+  /** column header containing element */
+  /** scrolling element to hold table */
+  /** footer element */
+  /** column resize handles */
+  /** holding div that contains loader and covers tabulator element to prevent interaction */
 }
 
 .tabulator[tabulator-layout="fitDataFill"] .tabulator-tableholder .tabulator-table {
@@ -38,6 +43,7 @@
   -khtml-user-select: none;
   -webkit-user-select: none;
   -o-user-select: none;
+    /** individual column header element */
 }
 
 .tabulator .tabulator-header.tabulator-header-hidden {
@@ -64,6 +70,10 @@
   text-align: left;
   vertical-align: bottom;
   overflow: hidden;
+      /** hold content of column header */
+      /** complex header column group */
+      /** header filter containing element */
+      /** styling child elements for sortable columns */
 }
 
 .tabulator .tabulator-header .tabulator-col.tabulator-moving {
@@ -77,6 +87,10 @@
   box-sizing: border-box;
   position: relative;
   padding: 4px;
+        /** header menu button */
+        /** hold title and sort arrow */
+        /** hold title of column header */
+        /** column sorter arrow */
 }
 
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-header-popup-button {
@@ -99,6 +113,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: bottom;
+          /** element to hold title editor */
 }
 
 .tabulator .tabulator-header .tabulator-col .tabulator-col-content .tabulator-col-title.tabulator-col-title-wrap {
@@ -135,6 +150,10 @@
   border-bottom: 6px solid #bbb;
 }
 
+.tabulator .tabulator-header .tabulator-col.tabulator-col-group {
+        /** gelement to hold sub columns in column group */
+}
+
 .tabulator .tabulator-header .tabulator-col.tabulator-col-group .tabulator-col-group-cols {
   position: relative;
   display: flex;
@@ -149,6 +168,7 @@
   margin-top: 2px;
   width: 100%;
   text-align: center;
+        /** styling adjustment for inbuilt editors */
 }
 
 .tabulator .tabulator-header .tabulator-col .tabulator-header-filter textarea {
@@ -290,6 +310,8 @@
   white-space: nowrap;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+    /** default placeholder element */
+    /** element to hold table rows */
 }
 
 .tabulator .tabulator-tableholder:focus {
@@ -325,6 +347,7 @@
   white-space: nowrap;
   overflow: visible;
   color: #333;
+      /** row element */
 }
 
 .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-calcs {
@@ -351,6 +374,8 @@
   -khtml-user-select: none;
   -webkit-user-select: none;
   -o-user-select: none;
+    /** pagination container element */
+    /** pagination button */
 }
 
 .tabulator .tabulator-footer .tabulator-footer-contents {
@@ -471,6 +496,7 @@
   width: 100%;
   background: rgba(0, 0, 0, 0.4);
   text-align: center;
+    /** loading message element */
 }
 
 .tabulator .tabulator-alert .tabulator-alert-msg {
@@ -481,6 +507,8 @@
   background: #fff;
   font-weight: bold;
   font-size: 16px;
+      /** loading message */
+      /** error message */
 }
 
 .tabulator .tabulator-alert .tabulator-alert-msg.tabulator-alert-state-msg {
@@ -498,6 +526,9 @@
   box-sizing: border-box;
   min-height: 22px;
   background-color: #fff;
+  /** row resize handles */
+  /** cell element */
+  /** row grouping element */
 }
 
 .tabulator-row.tabulator-row-even {
@@ -581,6 +612,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+    /** movable row handle */
 }
 
 .tabulator-row .tabulator-cell.tabulator-frozen {
@@ -631,10 +663,12 @@
   -khtml-user-select: none;
   -webkit-user-select: none;
   -o-user-select: none;
+      /** handle holder */
 }
 
 .tabulator-row .tabulator-cell.tabulator-row-handle .tabulator-row-handle-box {
   width: 80%;
+        /** Hamburger element */
 }
 
 .tabulator-row .tabulator-cell.tabulator-row-handle .tabulator-row-handle-box .tabulator-row-handle-bar {
@@ -766,6 +800,7 @@
   background: #ccc;
   font-weight: bold;
   min-width: 100%;
+    /** sorting arrow */
 }
 
 .tabulator-row.tabulator-group:hover {
@@ -1036,6 +1071,7 @@ body.tabulator-print-fullscreen-hide > *:not(.tabulator-print-fullscreen) {
 
 .tabulator-print-table {
   border-collapse: collapse;
+  /** row grouping element */
 }
 
 .tabulator-print-table .tabulator-data-tree-branch {
@@ -1060,6 +1096,7 @@ body.tabulator-print-fullscreen-hide > *:not(.tabulator-print-fullscreen) {
   background: #ccc;
   font-weight: bold;
   min-width: 100%;
+    /** sorting arrow */
 }
 
 .tabulator-print-table .tabulator-print-table-group:hover {
@@ -1170,5 +1207,3 @@ body.tabulator-print-fullscreen-hide > *:not(.tabulator-print-fullscreen) {
   width: 7px;
   background: #333;
 }
-
-/*# sourceMappingURL=tabulator.css.map */

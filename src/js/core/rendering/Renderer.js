@@ -2,203 +2,198 @@ import CoreFeature from '../CoreFeature.js';
 import Helpers from '../tools/Helpers.js';
 
 export default class Renderer extends CoreFeature{
-	constructor(table){
-		super(table);
+  constructor(table){
+    super(table);
 
-		this.elementVertical = table.rowManager.element;
-		this.elementHorizontal = table.columnManager.element;
-		this.tableElement =  table.rowManager.tableElement;
+    this.elementVertical = table.rowManager.element;
+    this.elementHorizontal = table.columnManager.element;
+    this.tableElement =  table.rowManager.tableElement;
 
-		this.verticalFillMode = "fit"; // used by row manager to determine how to size the render area ("fit" - fits container to the contents, "fill" - fills the container without resizing it)
-	}
-
-
-	///////////////////////////////////
-	/////// Internal Bindings /////////
-	///////////////////////////////////
-
-	initialize(){
-		//initialize core functionality
-	}
-
-	clearRows(){
-		//clear down existing rows layout
-	}
-
-	clearColumns(){
-		//clear down existing columns layout
-	}
+    /** used by row manager to determine how to size the render area ("fit" - fits container to the contents, "fill" - fills the container without resizing it) */
+    this.verticalFillMode = "fit"; 
+  }
 
 
-	reinitializeColumnWidths(columns){
-		//resize columns to fit data
-	}
+  //** --------------- Internal Bindings ---------------
+
+  initialize(){
+    /** initialize core functionality */
+  }
+
+  clearRows(){
+    /** clear down existing rows layout */
+  }
+
+  clearColumns(){
+    /** clear down existing columns layout */
+  }
 
 
-	renderRows(){
-		//render rows from a clean slate
-	}
+  reinitializeColumnWidths(columns){
+    /** resize columns to fit data */
+  }
 
-	renderColumns(){
-		//render columns from a clean slate
-	}
 
-	rerenderRows(callback){
-		// rerender rows and keep position
-		if(callback){
-			callback();
-		}
-	}
+  renderRows(){
+    /** render rows from a clean slate */
+  }
 
-	rerenderColumns(update, blockRedraw){
-		//rerender columns
-	}
+  renderColumns(){
+    /** render columns from a clean slate */
+  }
 
-	renderRowCells(row){
-		//render the cells in a row
-	}
+  rerenderRows(callback){
+    /**  rerender rows and keep position */
+    if(callback){
+      callback();
+    }
+  }
 
-	rerenderRowCells(row, force){
-		//rerender the cells in a row
-	}
+  rerenderColumns(update, blockRedraw){
+    /** rerender columns */
+  }
 
-	scrollColumns(left, dir){
-		//handle horizontal scrolling
-	}
+  renderRowCells(row){
+    /** render the cells in a row */
+  }
 
-	scrollRows(top, dir){
-		//handle vertical scrolling
-	}
+  rerenderRowCells(row, force){
+    /** rerender the cells in a row */
+  }
 
-	resize(){
-		//container has resized, carry out any needed recalculations (DO NOT RERENDER IN THIS FUNCTION)
-	}
+  scrollColumns(left, dir){
+    /** handle horizontal scrolling */
+  }
 
-	scrollToRow(row){
-		//scroll to a specific row
-	}
+  scrollRows(top, dir){
+    /** handle vertical scrolling */
+  }
 
-	scrollToRowNearestTop(row){
-		//determine weather the row is nearest the top or bottom of the table, return true for top or false for bottom
-	}
+  resize(){
+    /** container has resized, carry out any needed recalculations (DO NOT RERENDER IN THIS FUNCTION) */
+  }
 
-	visibleRows(includingBuffer){
-		//return the visible rows
-		return [];
-	}
+  scrollToRow(row){
+    /** scroll to a specific row */
+  }
 
-	///////////////////////////////////
-	//////// Helper Functions /////////
-	///////////////////////////////////
+  scrollToRowNearestTop(row){
+    /** determine weather the row is nearest the top or bottom of the table, return true for top or false for bottom */
+  }
 
-	rows(){
-		return this.table.rowManager.getDisplayRows();
-	}
+  visibleRows(includingBuffer){
+    /** return the visible rows */
+    return [];
+  }
 
-	styleRow(row, index){
-		var rowEl = row.getElement();
+  //** --------------- Helper Functions ---------------
 
-		if(index % 2){
-			rowEl.classList.add("tabulator-row-even");
-			rowEl.classList.remove("tabulator-row-odd");
-		}else{
-			rowEl.classList.add("tabulator-row-odd");
-			rowEl.classList.remove("tabulator-row-even");
-		}
-	}
+  rows(){
+    return this.table.rowManager.getDisplayRows();
+  }
 
-	///////////////////////////////////
-	/////// External Triggers /////////
-	/////// (DO NOT OVERRIDE) /////////
-	///////////////////////////////////
+  styleRow(row, index){
+    var rowEl = row.getElement();
 
-	clear(){
-		//clear down existing layout
-		this.clearRows();
-		this.clearColumns();
-	}
+    if(index % 2){
+      rowEl.classList.add("tabulator-row-even");
+      rowEl.classList.remove("tabulator-row-odd");
+    }else{
+      rowEl.classList.add("tabulator-row-odd");
+      rowEl.classList.remove("tabulator-row-even");
+    }
+  }
 
-	render(){
-		//render from a clean slate
-		this.renderRows();
-		this.renderColumns();
-	}
+  //** --------------- External Triggers ---------------
+  //** --------------- (DO NOT OVERRIDE) ---------------
 
-	rerender(callback){
-		// rerender and keep position
-		this.rerenderRows();
-		this.rerenderColumns();
-	}
+  clear(){
+    /** clear down existing layout */
+    this.clearRows();
+    this.clearColumns();
+  }
 
-	scrollToRowPosition(row, position, ifVisible){
-		var rowIndex = this.rows().indexOf(row),
-		rowEl = row.getElement(),
-		offset = 0;
+  render(){
+    /** render from a clean slate */
+    this.renderRows();
+    this.renderColumns();
+  }
 
-		return new Promise((resolve, reject) => {
-			if(rowIndex > -1){
+  rerender(callback){
+    /**  rerender and keep position */
+    this.rerenderRows();
+    this.rerenderColumns();
+  }
 
-				if(typeof ifVisible === "undefined"){
-					ifVisible = this.table.options.scrollToRowIfVisible;
-				}
+  scrollToRowPosition(row, position, ifVisible){
+    var rowIndex = this.rows().indexOf(row),
+    rowEl = row.getElement(),
+    offset = 0;
 
-				//check row visibility
-				if(!ifVisible){
-					if(Helpers.elVisible(rowEl)){
-						offset = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top;
-						
-						if(offset > 0 && offset < this.elementVertical.clientHeight - rowEl.offsetHeight){
-							resolve();
-							return false;
-						}
-					}
-				}
+    return new Promise((resolve, reject) => {
+      if(rowIndex > -1){
 
-				if(typeof position === "undefined"){
-					position = this.table.options.scrollToRowPosition;
-				}
+        if(typeof ifVisible === "undefined"){
+          ifVisible = this.table.options.scrollToRowIfVisible;
+        }
 
-				if(position === "nearest"){
-					position = this.scrollToRowNearestTop(row) ? "top" : "bottom";
-				}
+        /** check row visibility */
+        if(!ifVisible){
+          if(Helpers.elVisible(rowEl)){
+            offset = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top;
+            
+            if(offset > 0 && offset < this.elementVertical.clientHeight - rowEl.offsetHeight){
+              resolve();
+              return false;
+            }
+          }
+        }
 
-				//scroll to row
-				this.scrollToRow(row);
+        if(typeof position === "undefined"){
+          position = this.table.options.scrollToRowPosition;
+        }
 
-				//align to correct position
-				switch(position){
-					case "middle":
-					case "center":
+        if(position === "nearest"){
+          position = this.scrollToRowNearestTop(row) ? "top" : "bottom";
+        }
 
-						if(this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight){
-							this.elementVertical.scrollTop = this.elementVertical.scrollTop + (rowEl.offsetTop - this.elementVertical.scrollTop) - ((this.elementVertical.scrollHeight - rowEl.offsetTop) / 2);
-						}else{
-							this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.clientHeight / 2);
-						}
+        /** scroll to row */
+        this.scrollToRow(row);
 
-						break;
+        /** align to correct position */
+        switch(position){
+          case "middle":
+          case "center":
 
-					case "bottom":
+            if(this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight){
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop + (rowEl.offsetTop - this.elementVertical.scrollTop) - ((this.elementVertical.scrollHeight - rowEl.offsetTop) / 2);
+            }else{
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.clientHeight / 2);
+            }
 
-						if(this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight){
-							this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.scrollHeight - rowEl.offsetTop) + rowEl.offsetHeight;
-						}else{
-							this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight + rowEl.offsetHeight;
-						}
+            break;
 
-						break;
+          case "bottom":
 
-					case "top":
-						this.elementVertical.scrollTop = rowEl.offsetTop;					
-						break;
-				}
+            if(this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight){
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.scrollHeight - rowEl.offsetTop) + rowEl.offsetHeight;
+            }else{
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight + rowEl.offsetHeight;
+            }
 
-				resolve();
+            break;
 
-			}else{
-				console.warn("Scroll Error - Row not visible");
-				reject("Scroll Error - Row not visible");
-			}
-		});
-	}
+          case "top":
+            this.elementVertical.scrollTop = rowEl.offsetTop;          
+            break;
+        }
+
+        resolve();
+
+      }else{
+        console.warn("Scroll Error - Row not visible");
+        reject("Scroll Error - Row not visible");
+      }
+    });
+  }
 }

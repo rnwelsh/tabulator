@@ -9,9 +9,8 @@
     "**/*.css",
     "**/*.scss"
   ],
+  "packageManager": "^pnpm@7.17.1",
   "scripts": {
-    "lint": "eslint src --fix",
-    "prebuild": "eslint src --fix",
     "build": "rollup -c build/rollup.js",
     "dev": "rollup -c build/rollup.js -w --environment TARGET:dev",
     "dev:css": "rollup -c build/rollup.js -w --environment TARGET:css",
@@ -20,37 +19,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/olifolkerd/tabulator.git"
+    "url": "https://github.com/rnwelsh/tabulator.git"
   },
-  "keywords": [
-    "table",
-    "grid",
-    "datagrid",
-    "tabulator",
-    "editable",
-    "sort",
-    "format",
-    "resizable",
-    "list",
-    "scrollable",
-    "ajax",
-    "json",
-    "widget",
-    "jquery",
-    "react",
-    "angular",
-    "vue"
-  ],
   "author": "Oli Folkerd",
   "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/olifolkerd/tabulator/issues"
-  },
   "homepage": "http://tabulator.info/",
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^11.0.1",
-    "eslint": "^8.10.0",
-    "eslint-plugin-only-warn": "^1.0.3",
     "fs-extra": "^9.0.1",
     "globby": "^11.0.2",
     "node-sass": "^7.0.3",
@@ -60,6 +35,5 @@
     "rollup-plugin-license": "^2.2.0",
     "rollup-plugin-postcss": "^4.0.0",
     "rollup-plugin-terser": "^7.0.2"
-  },
-  "dependencies": {}
+  }
 }

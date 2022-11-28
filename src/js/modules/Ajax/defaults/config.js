@@ -1,3 +1,3 @@
 export default {
-	method: "GET",
+  method: "GET",
 };

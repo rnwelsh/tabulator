@@ -9,13 +9,13 @@ import exists from './sorters/exists.js';
 import alphanum from './sorters/alphanum.js';
 
 export default {
-	number:number,
-	string:string,
-	date:date,
-	time:time,
-	datetime:datetime,
-	boolean:boolean,
-	array:array,
-	exists:exists,
-	alphanum:alphanum
+  number:number,
+  string:string,
+  date:date,
+  time:time,
+  datetime:datetime,
+  boolean:boolean,
+  array:array,
+  exists:exists,
+  alphanum:alphanum
 };

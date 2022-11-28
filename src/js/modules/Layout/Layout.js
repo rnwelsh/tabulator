@@ -4,42 +4,42 @@ import defaultModes from './defaults/modes.js';
 
 class Layout extends Module{
 
-	constructor(table){
-		super(table, "layout");
+  constructor(table){
+    super(table, "layout");
 
-		this.mode = null;
+    this.mode = null;
 
-		this.registerTableOption("layout", "fitData"); //layout type
-		this.registerTableOption("layoutColumnsOnNewData", false); //update column widths on setData
+    this.registerTableOption("layout", "fitData"); //layout type
+    this.registerTableOption("layoutColumnsOnNewData", false); //update column widths on setData
 
-		this.registerColumnOption("widthGrow");
-		this.registerColumnOption("widthShrink");
-	}
+    this.registerColumnOption("widthGrow");
+    this.registerColumnOption("widthShrink");
+  }
 
-	//initialize layout system
-	initialize(){
-		var layout = this.table.options.layout;
+  /** initialize layout system */
+  initialize(){
+    var layout = this.table.options.layout;
 
-		if(Layout.modes[layout]){
-			this.mode = layout;
-		}else{
-			console.warn("Layout Error - invalid mode set, defaulting to 'fitData' : " + layout);
-			this.mode = 'fitData';
-		}
+    if(Layout.modes[layout]){
+      this.mode = layout;
+    }else{
+      console.warn("Layout Error - invalid mode set, defaulting to 'fitData' : " + layout);
+      this.mode = 'fitData';
+    }
 
-		this.table.element.setAttribute("tabulator-layout", this.mode);
-	}
+    this.table.element.setAttribute("tabulator-layout", this.mode);
+  }
 
-	getMode(){
-		return this.mode;
-	}
+  getMode(){
+    return this.mode;
+  }
 
-	//trigger table layout
-	layout(dataChanged){
-		this.dispatch("layout-refreshing");
-		Layout.modes[this.mode].call(this, this.table.columnManager.columnsByIndex, dataChanged);
-		this.dispatch("layout-refreshed");
-	}
+  /** trigger table layout */
+  layout(dataChanged){
+    this.dispatch("layout-refreshing");
+    Layout.modes[this.mode].call(this, this.table.columnManager.columnsByIndex, dataChanged);
+    this.dispatch("layout-refreshed");
+  }
 }
 
 Layout.moduleName = "layout";

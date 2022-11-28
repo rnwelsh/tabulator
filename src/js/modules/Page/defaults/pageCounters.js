@@ -3,6 +3,6 @@ import pages from './pageCounters/pages.js';
 
 
 export default {
-	rows:rows,
-	pages:pages,
+  rows:rows,
+  pages:pages,
 };

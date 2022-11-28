@@ -1,171 +1,181 @@
 //resize columns to fit
 export default function(columns, forced){
-	var totalWidth = this.table.rowManager.element.getBoundingClientRect().width; //table element width
-	var fixedWidth = 0; //total width of columns with a defined width
-	var flexWidth = 0; //total width available to flexible columns
-	var flexGrowUnits = 0; //total number of widthGrow blocks across all columns
-	var flexColWidth = 0; //desired width of flexible columns
-	var flexColumns = []; //array of flexible width columns
-	var fixedShrinkColumns = []; //array of fixed width columns that can shrink
-	var flexShrinkUnits = 0; //total number of widthShrink blocks across all columns
-	var overflowWidth = 0; //horizontal overflow width
-	var gapFill = 0; //number of pixels to be added to final column to close and half pixel gaps
+  /** table element width */
+  var totalWidth = this.table.rowManager.element.getBoundingClientRect().width; 
+  /** total width of columns with a defined width */
+  var fixedWidth = 0; 
+  /** total width available to flexible columns */
+  var flexWidth = 0; 
+  /** total number of widthGrow blocks across all columns */
+  var flexGrowUnits = 0; 
+  /** desired width of flexible columns */
+  var flexColWidth = 0; 
+  /** array of flexible width columns */
+  var flexColumns = []; 
+  /** array of fixed width columns that can shrink */
+  var fixedShrinkColumns = []; 
+  /** total number of widthShrink blocks across all columns */
+  var flexShrinkUnits = 0; 
+  /** horizontal overflow width */
+  var overflowWidth = 0; 
+  /** number of pixels to be added to final column to close and half pixel gaps */
+  var gapFill = 0; 
 
-	function calcWidth(width){
-		var colWidth;
+  function calcWidth(width){
+    var colWidth;
 
-		if(typeof(width) == "string"){
-			if(width.indexOf("%") > -1){
-				colWidth = (totalWidth / 100) * parseInt(width);
-			}else{
-				colWidth = parseInt(width);
-			}
-		}else{
-			colWidth = width;
-		}
+    if(typeof(width) == "string"){
+      if(width.indexOf("%") > -1){
+        colWidth = (totalWidth / 100) * parseInt(width);
+      }else{
+        colWidth = parseInt(width);
+      }
+    }else{
+      colWidth = width;
+    }
 
-		return colWidth;
-	}
+    return colWidth;
+  }
 
-	//ensure columns resize to take up the correct amount of space
-	function scaleColumns(columns, freeSpace, colWidth, shrinkCols){
-		var oversizeCols = [],
-		oversizeSpace = 0,
-		remainingSpace = 0,
-		nextColWidth = 0,
-		remainingFlexGrowUnits = flexGrowUnits,
-		gap = 0,
-		changeUnits = 0,
-		undersizeCols = [];
+  /** ensure columns resize to take up the correct amount of space */
+  function scaleColumns(columns, freeSpace, colWidth, shrinkCols){
+    var oversizeCols = [],
+    oversizeSpace = 0,
+    remainingSpace = 0,
+    nextColWidth = 0,
+    remainingFlexGrowUnits = flexGrowUnits,
+    gap = 0,
+    changeUnits = 0,
+    undersizeCols = [];
 
-		function calcGrow(col){
-			return (colWidth * (col.column.definition.widthGrow || 1));
-		}
+    function calcGrow(col){
+      return (colWidth * (col.column.definition.widthGrow || 1));
+    }
 
-		function calcShrink(col){
-			return  (calcWidth(col.width) - (colWidth * (col.column.definition.widthShrink || 0)));
-		}
+    function calcShrink(col){
+      return  (calcWidth(col.width) - (colWidth * (col.column.definition.widthShrink || 0)));
+    }
 
-		columns.forEach(function(col, i){
-			var width = shrinkCols ? calcShrink(col) : calcGrow(col);
-			if(col.column.minWidth >= width){
-				oversizeCols.push(col);
-			}else{
-				if(col.column.maxWidth && col.column.maxWidth < width){
-					col.width = col.column.maxWidth;
-					freeSpace -= col.column.maxWidth;
+    columns.forEach(function(col, i){
+      var width = shrinkCols ? calcShrink(col) : calcGrow(col);
+      if(col.column.minWidth >= width){
+        oversizeCols.push(col);
+      }else{
+        if(col.column.maxWidth && col.column.maxWidth < width){
+          col.width = col.column.maxWidth;
+          freeSpace -= col.column.maxWidth;
 
-					remainingFlexGrowUnits -= shrinkCols ? (col.column.definition.widthShrink || 1) : (col.column.definition.widthGrow || 1);
+          remainingFlexGrowUnits -= shrinkCols ? (col.column.definition.widthShrink || 1) : (col.column.definition.widthGrow || 1);
 
-					if(remainingFlexGrowUnits){
-						colWidth = Math.floor(freeSpace/remainingFlexGrowUnits);
-					}
-				}else{
-					undersizeCols.push(col);
-					changeUnits += shrinkCols ? (col.column.definition.widthShrink || 1) : (col.column.definition.widthGrow || 1);
-				}
-			}
-		});
+          if(remainingFlexGrowUnits){
+            colWidth = Math.floor(freeSpace/remainingFlexGrowUnits);
+          }
+        }else{
+          undersizeCols.push(col);
+          changeUnits += shrinkCols ? (col.column.definition.widthShrink || 1) : (col.column.definition.widthGrow || 1);
+        }
+      }
+    });
 
-		if(oversizeCols.length){
-			oversizeCols.forEach(function(col){
-				oversizeSpace += shrinkCols ?  col.width - col.column.minWidth : col.column.minWidth;
-				col.width = col.column.minWidth;
-			});
+    if(oversizeCols.length){
+      oversizeCols.forEach(function(col){
+        oversizeSpace += shrinkCols ?  col.width - col.column.minWidth : col.column.minWidth;
+        col.width = col.column.minWidth;
+      });
 
-			remainingSpace = freeSpace - oversizeSpace;
+      remainingSpace = freeSpace - oversizeSpace;
 
-			nextColWidth = changeUnits ? Math.floor(remainingSpace/changeUnits) : remainingSpace;
+      nextColWidth = changeUnits ? Math.floor(remainingSpace/changeUnits) : remainingSpace;
 
-			gap = scaleColumns(undersizeCols, remainingSpace, nextColWidth, shrinkCols);
-		}else{
-			gap = changeUnits ? freeSpace - (Math.floor(freeSpace/changeUnits) * changeUnits) : freeSpace;
+      gap = scaleColumns(undersizeCols, remainingSpace, nextColWidth, shrinkCols);
+    }else{
+      gap = changeUnits ? freeSpace - (Math.floor(freeSpace/changeUnits) * changeUnits) : freeSpace;
 
-			undersizeCols.forEach(function(column){
-				column.width = shrinkCols ? calcShrink(column) : calcGrow(column);
-			});
-		}
+      undersizeCols.forEach(function(column){
+        column.width = shrinkCols ? calcShrink(column) : calcGrow(column);
+      });
+    }
 
-		return gap;
-	}
+    return gap;
+  }
 
-	if(this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)){
-		this.table.modules.responsiveLayout.update();
-	}
+  if(this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)){
+    this.table.modules.responsiveLayout.update();
+  }
 
-	//adjust for vertical scrollbar if present
-	if(this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight){
-		totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
-	}
+  /** adjust for vertical scrollbar if present */
+  if(this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight){
+    totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
+  }
 
-	columns.forEach(function(column){
-		var width, minWidth, colWidth;
+  columns.forEach(function(column){
+    var width, minWidth, colWidth;
 
-		if(column.visible){
+    if(column.visible){
 
-			width = column.definition.width;
-			minWidth =  parseInt(column.minWidth);
+      width = column.definition.width;
+      minWidth =  parseInt(column.minWidth);
 
-			if(width){
+      if(width){
 
-				colWidth = calcWidth(width);
+        colWidth = calcWidth(width);
 
-				fixedWidth += colWidth > minWidth ? colWidth : minWidth;
+        fixedWidth += colWidth > minWidth ? colWidth : minWidth;
 
-				if(column.definition.widthShrink){
-					fixedShrinkColumns.push({
-						column:column,
-						width:colWidth > minWidth ? colWidth : minWidth
-					});
-					flexShrinkUnits += column.definition.widthShrink;
-				}
+        if(column.definition.widthShrink){
+          fixedShrinkColumns.push({
+            column:column,
+            width:colWidth > minWidth ? colWidth : minWidth
+          });
+          flexShrinkUnits += column.definition.widthShrink;
+        }
 
-			}else{
-				flexColumns.push({
-					column:column,
-					width:0,
-				});
-				flexGrowUnits += column.definition.widthGrow || 1;
-			}
-		}
-	});
+      }else{
+        flexColumns.push({
+          column:column,
+          width:0,
+        });
+        flexGrowUnits += column.definition.widthGrow || 1;
+      }
+    }
+  });
 
-	//calculate available space
-	flexWidth = totalWidth - fixedWidth;
+  /** calculate available space */
+  flexWidth = totalWidth - fixedWidth;
 
-	//calculate correct column size
-	flexColWidth = Math.floor(flexWidth / flexGrowUnits);
+  /** calculate correct column size */
+  flexColWidth = Math.floor(flexWidth / flexGrowUnits);
 
-	//generate column widths
-	gapFill = scaleColumns(flexColumns, flexWidth, flexColWidth, false);
+  /** generate column widths */
+  gapFill = scaleColumns(flexColumns, flexWidth, flexColWidth, false);
 
-	//increase width of last column to account for rounding errors
-	if(flexColumns.length && gapFill > 0){
-		flexColumns[flexColumns.length-1].width += gapFill;
-	}
+  /** increase width of last column to account for rounding errors */
+  if(flexColumns.length && gapFill > 0){
+    flexColumns[flexColumns.length-1].width += gapFill;
+  }
 
-	//calculate space for columns to be shrunk into
-	flexColumns.forEach(function(col){
-		flexWidth -= col.width;
-	});
+  /** calculate space for columns to be shrunk into */
+  flexColumns.forEach(function(col){
+    flexWidth -= col.width;
+  });
 
-	overflowWidth = Math.abs(gapFill) + flexWidth;
+  overflowWidth = Math.abs(gapFill) + flexWidth;
 
-	//shrink oversize columns if there is no available space
-	if(overflowWidth > 0 && flexShrinkUnits){
-		gapFill = scaleColumns(fixedShrinkColumns, overflowWidth, Math.floor(overflowWidth / flexShrinkUnits), true);
-	}
+  /** shrink oversize columns if there is no available space */
+  if(overflowWidth > 0 && flexShrinkUnits){
+    gapFill = scaleColumns(fixedShrinkColumns, overflowWidth, Math.floor(overflowWidth / flexShrinkUnits), true);
+  }
 
-	//decrease width of last column to account for rounding errors
-	if(gapFill && fixedShrinkColumns.length){
-		fixedShrinkColumns[fixedShrinkColumns.length-1].width -= gapFill;
-	}
+  /** decrease width of last column to account for rounding errors */
+  if(gapFill && fixedShrinkColumns.length){
+    fixedShrinkColumns[fixedShrinkColumns.length-1].width -= gapFill;
+  }
 
-	flexColumns.forEach(function(col){
-		col.column.setWidth(col.width);
-	});
+  flexColumns.forEach(function(col){
+    col.column.setWidth(col.width);
+  });
 
-	fixedShrinkColumns.forEach(function(col){
-		col.column.setWidth(col.width);
-	});
+  fixedShrinkColumns.forEach(function(col){
+    col.column.setWidth(col.width);
+  });
 }

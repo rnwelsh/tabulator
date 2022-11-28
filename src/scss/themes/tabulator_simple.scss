@@ -39,64 +39,64 @@ $footerActiveColor:#d00 !default; //footer bottom active text color
 @import "../tabulator.scss";
 
 .tabulator{
-	border:none;
-	background-color: $backgroundColor;
+  border:none;
+  background-color: $backgroundColor;
 
-	.tabulator-header{
-		.tabulator-calcs-holder{
-			background:darken($headerBackgroundColor, 5%) !important;
+  .tabulator-header{
+    .tabulator-calcs-holder{
+      background:darken($headerBackgroundColor, 5%) !important;
 
-			.tabulator-row{
-				background:darken($headerBackgroundColor, 5%) !important;
-			}
+      .tabulator-row{
+        background:darken($headerBackgroundColor, 5%) !important;
+      }
 
-			border-bottom:1px solid $headerSeparatorColor;
-		}
-	}
+      border-bottom:1px solid $headerSeparatorColor;
+    }
+  }
 
-	.tabulator-tableholder{
-		.tabulator-placeholder{
-			span{
-				color:#000;
-			}
-		}
-	}
+  .tabulator-tableholder{
+    .tabulator-placeholder{
+      span{
+        color:#000;
+      }
+    }
+  }
 
-	.tabulator-footer{
-		.tabulator-calcs-holder{
-			background:darken($footerBackgroundColor, 5%) !important;
+  .tabulator-footer{
+    .tabulator-calcs-holder{
+      background:darken($footerBackgroundColor, 5%) !important;
 
-			.tabulator-row{
-				background:darken($footerBackgroundColor, 5%) !important;
-			}
+      .tabulator-row{
+        background:darken($footerBackgroundColor, 5%) !important;
+      }
 
-			border-bottom:1px solid $footerBackgroundColor;
-		}
-	}
+      border-bottom:1px solid $footerBackgroundColor;
+    }
+  }
 }
 
 .tabulator-row{
-	border-bottom:1px solid $rowBorderColor;
+  border-bottom:1px solid $rowBorderColor;
 
-	.tabulator-cell{
-		&:last-of-type{
-			border-right: none;
-		}
-	}
+  .tabulator-cell{
+    &:last-of-type{
+      border-right: none;
+    }
+  }
 
-	&.tabulator-group{
-		span{
-			color:#666;
-		}
-	}
+  &.tabulator-group{
+    span{
+      color:#666;
+    }
+  }
 }
 
 .tabulator-print-table{
-	.tabulator-print-table-group{
-		span{
-			margin-left:10px;
-			color:#666;
-		}
-	}
+  .tabulator-print-table-group{
+    span{
+      margin-left:10px;
+      color:#666;
+    }
+  }
 }
 

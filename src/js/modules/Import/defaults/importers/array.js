@@ -1,5 +1,5 @@
 function arrayImporter(input){
-	return input;
+  return input;
 }
 
 export default arrayImporter;
