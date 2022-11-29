@@ -11,11 +11,11 @@
   ],
   "packageManager": "^pnpm@7.17.1",
   "scripts": {
-    "build": "rollup -c build/rollup.mjs",
-    "dev": "rollup -c build/rollup.js -w --environment TARGET:dev",
-    "dev:css": "rollup -c build/rollup.js -w --environment TARGET:css",
-    "dev:esm": "rollup -c build/rollup.js -w --environment TARGET:esm",
-    "dev:umd": "rollup -c build/rollup.js -w --environment TARGET:umd"
+    "build": "rollup -c",
+    "dev": "rollup -c -w --environment TARGET:dev",
+    "dev:css": "rollup -c -w --environment TARGET:css",
+    "dev:esm": "rollup -c -w --environment TARGET:esm",
+    "dev:umd": "rollup -c -w --environment TARGET:umd"
   },
   "repository": {
     "type": "git",
@@ -25,15 +25,15 @@
   "license": "MIT",
   "homepage": "http://tabulator.info/",
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^15.0.1",
-    "@rollup/plugin-terser": "^0.1.0",
+    "esbuild": "^0.15.16",
     "fs-extra": "^9.1.0",
     "globby": "^11.1.0",
     "postcss": "^8.4.19",
     "postcss-prettify": "^0.3.4",
     "rollup": "^3.5.0",
-    "rollup-plugin-license": "^3.0.1",
+    "rollup-plugin-esbuild": "^5.0.0",
     "rollup-plugin-postcss": "^4.0.2",
+    "rollup-plugin-sizes": "^1.0.4",
     "sass": "^1.56.1"
   }
 }
