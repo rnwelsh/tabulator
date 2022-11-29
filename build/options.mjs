@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 export const watch = process.env.TARGET 
 export const shouldCreate = {
   minified: true,
-  unminified: false,
+  unminified: true,
   sourceMaps: false,
 }
 

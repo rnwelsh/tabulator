@@ -19,7 +19,6 @@ export default (async () => {
     //** dynamic import css plugins here 
     const postcss = (await import('rollup-plugin-postcss')).default
     const postcssPlugins = [(await import('postcss-prettify')).default ]
-    const advanced =  (await import('cssnano-preset-advanced')).default 
     //** rollup css config template */
     const cssOptions = (inputFile, minify=false) => ({
       input: inputFile,
