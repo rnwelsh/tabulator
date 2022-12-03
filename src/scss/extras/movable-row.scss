@@ -1,0 +1,20 @@
+    // movable row handle 
+    .tabulator-row-handle{
+      display: inline-flex;
+      align-items:center;
+      justify-content:center;
+      user-select: none;
+      
+      // handle holder 
+      .tabulator-row-handle-box{
+        width:80%;
+        
+        // Hamburger element 
+        .tabulator-row-handle-bar{
+          width:100%;
+          height:3px;
+          margin-top:2px;
+          background: var(--accent-neutral-4);
+        }
+      }
+    }
