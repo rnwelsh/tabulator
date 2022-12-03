@@ -1,0 +1,241 @@
+
+
+/* https://tailwind.ink/code */
+// :root {
+  
+//   // .primary {
+//   --ualr-50  : #fbfbfa;
+//   --ualr-100 : #f8f1f1;
+//   --ualr-200 : #efd8e0;
+//   --ualr-300 : #dbb0be;
+//   --ualr-400 : #c98295;
+//   --ualr-500 : #b05e71;
+//   --ualr-600 : #924352;
+//   --ualr-700 : #6e2639;
+//   --ualr-800 : #4b2229;
+//   --ualr-900 : #2c1418;
+  
+//   // .inter {
+//   --uasa-50:  #fafbf9;
+//   --uasa-100: #f5f1f2;
+//   --uasa-200: #e8dbe2;
+//   --uasa-300: #cdb5c1;
+//   --uasa-400: #b08a98;
+//   --uasa-500: #936674;
+//   --uasa-600: #774b56;
+//   --uasa-700: #593840;
+//   --uasa-800: #3c262b;
+//   --uasa-900: #23171a;
+  
+//   // .secondary {
+//   --silv-50   : #f8f9f8;
+//   --silv-100  : #eff0f2;
+//   --silv-200  : #dbdce2;
+//   --silv-300  : #a7a9ac;
+//   --silv-400  : #8d929c;
+//   --silv-500  : #70707a;
+//   --silv-600  : #5a555d;
+//   --silv-700  : #464047;
+//   --silv-800  : #302c32;
+//   --silv-900  : #1d1b20;
+// }
+
+// Forward declarations so the mixin mappers works correctly
+
+  $--bg-color               : --bg-color                ;
+  $--border-color           : --border-color            ;
+  $--header-bg-color        : --header-bg-color         ;
+  $--header-text-color      : --header-text-color       ;
+  $--header-border-color    : --header-border-color     ;
+  $--header-separator-color : --header-separator-color  ;
+  $--sort-arrow-hover       : --sort-arrow-hover        ;
+  $--sort-arrow-active      : --sort-arrow-active       ;
+  $--sort-arrow-inactive    : --sort-arrow-inactive     ;
+  $--row-bg-color           : --row-bg-color            ;
+  $--row-alt-bg-color       : --row-alt-bg-color        ;
+  $--row-border-color       : --row-border-color        ;
+  $--row-text-color         : --row-text-color          ;
+  $--row-hover-bg           : --row-hover-bg            ;
+  $--row-sel-bg             : --row-sel-bg              ;
+  $--row-sel-bg-hover       : --row-sel-bg-hover        ;
+  $--edit-box-color         : --edit-box-color          ;
+  $--error-color            : --error-color             ;
+  $--footer-bg-color        : --footer-bg-color         ;
+  $--footer-text-color      : --footer-text-color       ;
+  $--footer-border-color    : --footer-border-color     ;
+  $--footer-separator-color : --footer-separator-color  ;
+  $--footer-active-color    : --footer-active-color     ;
+
+  $--accent-neutral-1 : --accent-neutral-1;
+  $--accent-neutral-2 : --accent-neutral-2;
+  $--accent-neutral-3 : --accent-neutral-3;
+  $--accent-neutral-4 : --accent-neutral-4;
+
+  $--accent-contrast-1 : --accent-contrast-1;
+  $--accent-contrast-2 : --accent-contrast-2;
+  $--accent-contrast-3 : --accent-contrast-3;
+  $--accent-contrast-4 : --accent-contrast-4;
+  
+  $--accent-bold-1    : --accent-bold-1;
+  $--accent-bold-2    : --accent-bold-2;
+  $--accent-bold-3    : --accent-bold-3;
+  $--accent-bold-4    : --accent-bold-4;
+
+
+// -----------------------------
+//   SHADES
+// -----------------------------
+
+// https://ualr.edu/communications/colors/
+
+// Primary Brand Colors
+$ualrMaroon       : #6e2639;
+$ualrSilver       : #a7a9ac;
+
+// Secondary Brand Colors
+$ualrMaroonLight  : #98344f;
+$ualrMaroonDark   : #4c1a27;
+$ualrGreyLight    : #eeeeee;
+$ualrGreyDark     : #333333;
+
+// Primary Brand Gradients
+$ualr-50  : #fbfbfa;
+$ualr-100 : #f8f1f1;
+$ualr-200 : #efd8e0;
+$ualr-300 : #dbb0be;
+$ualr-400 : #c98295;
+$ualr-500 : #b05e71;
+$ualr-600 : #924352;
+$ualr-700 : #6e2639;  // <-- ualr-700 = maroon (primary brand)
+$ualr-800 : #4b2229;
+$ualr-900 : #2c1418;
+  
+// Blended maroon & silver
+$uasi-50 : #fafbf9;
+$uasi-100: #f5f1f2;
+$uasi-200: #e8dbe2;
+$uasi-300: #cdb5c1;
+$uasi-400: #b08a98;
+$uasi-500: #936674;
+$uasi-600: #774b56;
+$uasi-700: #593840;
+$uasi-800: #3c262b;
+$uasi-900: #23171a;
+
+$silv-50   : #f8f9f8;
+$silv-100  : #eff0f2;
+$silv-200  : #dbdce2;
+$silv-300  : #a7a9ac; // <-- silv-300 = silver (primary brand)
+$silv-400  : #8d929c;
+$silv-500  : #70707a;
+$silv-600  : #5a555d;
+$silv-700  : #464047;
+$silv-800  : #302c32;
+$silv-900  : #1d1b20;
+
+$theme-map-light: (
+  /* main theme */
+  $--bg-color                    : var(--silv-200),
+  $--border-color                : var(--silv-300),
+
+  /* headers */
+  $--header-bg-color             : var(--uasi-500),
+  $--header-text-color           : var(--uasi-900),
+  $--header-border-color         : var(--silv-500),
+  $--header-separator-color      : var(--uasi-600),
+
+  /* header arrows */
+  $--sort-arrow-hover            : var(--silv-50 ),
+  $--sort-arrow-active           : var(--silv-300),
+  $--sort-arrow-inactive         : var(--silv-600),
+
+  /* rows */
+  $--row-bg-color                : var(--silv-50),
+  $--row-alt-bg-color            : var(--silv-200),
+  $--row-border-color            : var(--silv-300),
+  $--row-text-color              : var(--silv-800),
+  $--row-hover-bg                : var(--ualrMaroonLight),
+
+  $--row-sel-bg                  : var(--ualrMaroon),
+  $--row-sel-bg-hover            : var(--ualrMaroonLight),
+
+  $--edit-box-color              : var(--silv-300),
+  $--error-color                 : var(--ualrMaroon),
+
+  /* footers */
+  $--footer-bg-color             : var(--silv-200),
+  $--footer-text-color           : var(--silv-800),
+  $--footer-border-color         : var(--silv-300),
+  $--footer-separator-color      : var(--silv-100),
+  $--footer-active-color         : var(--ualrMaroonLight),
+  
+  /* generic styles */
+  $--accent-neutral-1 : var(--silv-50),
+  $--accent-neutral-2 : var(--silv-100),
+  $--accent-neutral-3 : var(--silv-200),
+  $--accent-neutral-4 : var(--silv-300),
+  
+  $--accent-contrast-1 : var(--silv-900),
+  $--accent-contrast-2 : var(--silv-800),
+  $--accent-contrast-3 : var(--silv-700),
+  $--accent-contrast-4 : var(--silv-600),
+  
+  $--accent-bold-1    : var(--ualr-300),
+  $--accent-bold-2    : var(--ualr-400),
+  $--accent-bold-3    : var(--ualr-500),
+  $--accent-bold-4    : var(--ualr-600),
+);
+
+$theme-map-dark: (
+  /* main theme */
+  $--bg-color                    : var(--silv-800),
+  $--border-color                : var(--silv-700),
+
+  /* headers */
+  $--header-bg-color             : var(--uasi-900),
+  $--header-text-color           : var(--uasi-500),
+  $--header-border-color         : var(--silv-700),
+  $--header-separator-color      : var(--uasi-800),
+
+  /* header arrows */
+  $--sort-arrow-hover            : var(--silv-500 ),
+  $--sort-arrow-active           : var(--ualr-700),
+  $--sort-arrow-inactive         : var(--silv-700),
+
+  /* rows */
+  $--row-bg-color                : var(--silv-900),
+  $--row-alt-bg-color            : var(--silv-800),
+  $--row-border-color            : var(--silv-700),
+  $--row-text-color              : var(--silv-200),
+  $--row-hover-bg                : var(--ualrMaroonDark),
+
+  $--row-sel-bg                  : var(--ualrMaroon),
+  $--row-sel-bg-hover            : var(--ualrMaroonDark),
+
+  $--edit-box-color              : var(--silv-700),
+  $--error-color                 : var(--ualrMaroon),
+
+  /* footers */
+  $--footer-bg-color             : var(--silv-800),
+  $--footer-text-color           : var(--silv-200),
+  $--footer-border-color         : var(--silv-700),
+  $--footer-separator-color      : var(--silv-600),
+  $--footer-active-color         : var(--ualrMaroonDark),
+  
+  /* generic styles */
+  $--accent-neutral-1 : var(--silv-900),
+  $--accent-neutral-2 : var(--silv-800),
+  $--accent-neutral-3 : var(--silv-700),
+  $--accent-neutral-4 : var(--silv-600),
+  
+  $--accent-contrast-1 : var(--silv-50),
+  $--accent-contrast-2 : var(--silv-100),
+  $--accent-contrast-3 : var(--silv-200),
+  $--accent-contrast-4 : var(--silv-300),
+  
+  $--accent-bold-1    : var(--ualr-800),
+  $--accent-bold-2    : var(--ualr-700),
+  $--accent-bold-3    : var(--ualr-600),
+  $--accent-bold-4    : var(--ualr-500),
+  
+);

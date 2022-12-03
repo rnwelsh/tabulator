@@ -1,0 +1,121 @@
+
+
+
+.tabulator {
+    // footer element 
+    &-footer{
+      border-top:1px solid var(--footer-separator-color);
+      background-color: var(--footer-background-color);
+      
+      color: var(--footer-text-color);
+      font-weight:bold;
+      white-space:nowrap;
+      user-select:none;
+      
+      
+      .tabulator-footer-contents {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        
+        padding:5px 10px;
+        
+        &:empty{
+          display: none;
+        }
+      }
+      
+      .tabulator-calcs-holder{
+        box-sizing:border-box;
+        width:100%;
+        
+        text-align: left;
+        
+        background:var(--footer-background-color);
+        border-bottom:1px solid var(--row-border-color);
+        border-top:1px solid var(--row-border-color);
+        
+        overflow: hidden;
+        
+        .tabulator-row{
+          display: inline-block;
+          background:var(--footer-background-color);
+          
+          .tabulator-col-resize-handle{
+            display: none;
+          }
+        }
+        
+        
+        &:only-child{
+          margin-bottom:-5px;
+          border-bottom:none;
+        }
+      }
+      
+      &>*+.tabulator-page-counter{
+        margin-left:10px;
+      }
+      
+      .tabulator-page-counter {
+        font-weight: normal;
+      }
+      
+      .tabulator-paginator{
+        flex:1;
+        
+        text-align: right;
+        
+        color: var(--footer-text-color);
+        font-family:inherit;
+        font-weight:inherit;
+        font-size:inherit;
+      }
+      
+      // pagination container element 
+      .tabulator-page-size{
+        display:inline-block;
+        
+        margin:0 5px;
+        padding:2px 5px;
+        
+        border:1px solid var(--footer-border-color);
+        border-radius:3px;
+      }
+      
+      .tabulator-pages{
+        margin:0 7px;
+      }
+      
+      // pagination button 
+      .tabulator-page{
+        display:inline-block;
+        
+        margin:0 2px;
+        padding:2px 5px;
+        
+        border:1px solid var(--footer-border-color);
+        border-radius:3px;
+        
+        background:rgba(255,255,255,.2);
+        
+        &.active{
+          color:var(--footer-active-color);
+        }
+        
+        &:disabled{
+          opacity:.5;
+        }
+        
+        &:not(.disabled){
+          &:hover{
+            cursor:pointer;
+            background:rgba(0,0,0,.2);
+            color:var(--accent-neutral-1);
+          }
+        }
+      }
+    }
+  
+}

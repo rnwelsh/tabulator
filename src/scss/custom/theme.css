@@ -1,0 +1,92 @@
+/* https://tailwind.ink/code */
+:root {
+  --ualr-50: #fbfbfa;
+  --ualr-100: #f8f1f1;
+  --ualr-200: #efd8e0;
+  --ualr-300: #dbb0be;
+  --ualr-400: #c98295;
+  --ualr-500: #b05e71;
+  --ualr-600: #924352;
+  --ualr-700: #6e2639;
+  --ualr-800: #4b2229;
+  --ualr-900: #2c1418;
+  --uasa-50: #fafbf9;
+  --uasa-100: #f5f1f2;
+  --uasa-200: #e8dbe2;
+  --uasa-300: #cdb5c1;
+  --uasa-400: #b08a98;
+  --uasa-500: #936674;
+  --uasa-600: #774b56;
+  --uasa-700: #593840;
+  --uasa-800: #3c262b;
+  --uasa-900: #23171a;
+  --silv-50: #f8f9f8;
+  --silv-100: #eff0f2;
+  --silv-200: #dbdce2;
+  --silv-300: #a7a9ac;
+  --silv-400: #8d929c;
+  --silv-500: #70707a;
+  --silv-600: #5a555d;
+  --silv-700: #464047;
+  --silv-800: #302c32;
+  --silv-900: #1d1b20;
+}
+
+.tabulator {
+  --text-size: 14px;
+  --header-margin: 4px;
+}
+
+.light .tabulator {
+  --bg-color: var(--silv-800);
+  --border-color: var(--silv-700);
+  --header-bg-color: var(--uasi-900);
+  --header-text-color: var(--uasi-500);
+  --header-border-color: var(--silv-700);
+  --header-separator-color: var(--uasi-800);
+  --sort-arrow-hover: var(--silv-500);
+  --sort-arrow-active: var(--ualr-700);
+  --sort-arrow-inactive: var(--silv-700);
+  --row-bg-color: var(--silv-900);
+  --row-alt-bg-color: var(--silv-800);
+  --row-border-color: var(--silv-700);
+  --row-text-color: var(--silv-200);
+  --row-hover-bg: var(--ualrMaroonDark);
+  --row-sel-bg: var(--ualrMaroon);
+  --row-sel-bg-hover: var(--ualrMaroonDark);
+  --edit-box-color: var(--silv-700);
+  --error-color: var(--ualrMaroon);
+  --footer-bg-color: var(--silv-800);
+  --footer-text-color: var(--silv-200);
+  --footer-border-color: var(--silv-700);
+  --footer-separator-color: var(--silv-600);
+  --footer-active-color: var(--ualrMaroonDark);
+  
+  
+}
+
+.dark .tabulator {
+  --bg-color: var(--silv-200);
+  --border-color: var(--silv-300);
+  --header-bg-color: var(--uasi-500);
+  --header-text-color: var(--uasi-900);
+  --header-border-color: var(--silv-500);
+  --header-separator-color: var(--uasi-600);
+  --sort-arrow-hover: var(--silv-50);
+  --sort-arrow-active: var(--silv-300);
+  --sort-arrow-inactive: var(--silv-600);
+  --row-bg-color: var(--silv-5) 0;
+  --row-alt-bg-color: var(--silv-20) 0;
+  --row-border-color: var(--silv-30) 0;
+  --row-text-color: var(--silv-80) 0;
+  --row-hover-bg: var(--ualrMaroonLigh) t;
+  --row-sel-bg: var(--ualrMaroon);
+  --row-sel-bg-hover: var(--ualrMaroonLight);
+  --edit-box-color: var(--silv-300);
+  --error-color: var(--ualrMaroon);
+  --footer-bg-color: var(--silv-200);
+  --footer-text-color: var(--silv-800);
+  --footer-border-color: var(--silv-300);
+  --footer-separator-color: var(--silv-100);
+  --footer-active-color: var(--ualrMaroonLight);
+}

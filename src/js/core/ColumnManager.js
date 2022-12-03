@@ -732,6 +732,6 @@ export default class ColumnManager extends CoreFeature {
     
     this.dispatch("table-redraw", force);
     
-    this.table.footerManager.redraw();
+    // this.table.footerManager.redraw();
   }
 }

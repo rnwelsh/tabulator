@@ -1,0 +1,13 @@
+@use 'colors';
+
+@mixin theme-light($map: colors.$theme-map-light) {
+  @each $key, $value in $map {
+      #{$key}: #{$value};
+  }
+}
+
+@mixin theme-dark($map: colors.$theme-map-dark) {
+  @each $key, $value in $map {
+      #{$key}: #{$value};
+  }
+}

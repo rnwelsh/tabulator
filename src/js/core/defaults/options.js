@@ -1,3 +1,4 @@
+
 export default {
 
   /** flag to console log events */
@@ -13,8 +14,9 @@ export default {
   /** allow toggling of deprecation warnings */
   debugDeprecation:true, 
 
-  /** height of tabulator */
-  height:false, 
+  /** height of tabulator [height:false*/
+  height:                '100%',
+
   /** minimum height of tabulator */
   minHeight:false, 
   /** maximum height of tabulator */
@@ -28,7 +30,10 @@ export default {
   /** store for colum header info */
   columns:[],
   /** store column default props */
-  columnDefaults:{}, 
+  columnDefaults:{
+    headerFilter:       'input',
+    headerSortTristate: true,
+  }, 
 
   /** default starting data */
   data:false, 
@@ -82,4 +87,15 @@ export default {
   dataSendParams:{},
 
   dataReceiveParams:{},
+  
+  
+  // >>-----------------CUSTOM DEFAULTS ----------------->>
+  layout:                'fitDataFill',
+  clipboard:             'copy',
+  clipboardCopyRowRange: "selected",
+  selectable:            true,
+  selectableRangeMode:   "click",
+  movableColumns:        true,
+  
+  
 };

@@ -1,0 +1,17 @@
+@use 'useTheme' ;
+
+// -----------------------------
+//   SIZING
+// -----------------------------
+
+
+.tabulator {
+  --text-size      :  14px; 
+  --header-margin  :  4px ; 
+}
+
+
+.light .tabulator { @include useTheme.theme-dark; }
+
+.dark  .tabulator { @include useTheme.theme-light; }
+

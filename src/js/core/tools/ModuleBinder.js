@@ -1,4 +1,5 @@
 import * as coreModules from '../modules/core.js';
+import * as enabledModules from '../modules/enabled.js';
 import TableRegistry from './TableRegistry.js';
 
 export default class ModuleBinder {
@@ -6,6 +7,9 @@ export default class ModuleBinder {
   constructor(tabulator, modules){
     this.bindStaticFunctionality(tabulator);
     this.bindModules(tabulator, coreModules, true);
+    
+    //>------->>  optional modules enabled by default
+    this.bindModules(tabulator, enabledModules);
     
     if(modules){
       this.bindModules(tabulator, modules);

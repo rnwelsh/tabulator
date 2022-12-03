@@ -1,6 +1,59 @@
 /**
  * Tabulator v5.4.2 (c) Oliver Folkerd 2022
  */
+var defaultOptions = {
+  debugEventsExternal: false,
+  debugEventsInternal: false,
+  debugInvalidOptions: true,
+  debugInvalidComponentFuncs: true,
+  debugInitialization: true,
+  debugDeprecation: true,
+  height: "100%",
+  minHeight: false,
+  maxHeight: false,
+  columnHeaderVertAlign: "top",
+  popupContainer: false,
+  columns: [],
+  columnDefaults: {
+    headerFilter: "input",
+    headerSortTristate: true
+  },
+  data: false,
+  autoColumns: false,
+  autoColumnsDefinitions: false,
+  nestedFieldSeparator: ".",
+  footerElement: false,
+  index: "id",
+  textDirection: "auto",
+  addRowPos: "bottom",
+  headerVisible: true,
+  renderVertical: "virtual",
+  renderHorizontal: "basic",
+  renderVerticalBuffer: 0,
+  scrollToRowPosition: "top",
+  scrollToRowIfVisible: true,
+  scrollToColumnPosition: "left",
+  scrollToColumnIfVisible: true,
+  rowFormatter: false,
+  rowFormatterPrint: null,
+  rowFormatterClipboard: null,
+  rowFormatterHtmlOutput: null,
+  rowHeight: null,
+  placeholder: false,
+  dataLoader: true,
+  dataLoaderLoading: false,
+  dataLoaderError: false,
+  dataLoaderErrorTimeout: 3e3,
+  dataSendParams: {},
+  dataReceiveParams: {},
+  layout: "fitDataFill",
+  clipboard: "copy",
+  clipboardCopyRowRange: "selected",
+  selectable: true,
+  selectableRangeMode: "click",
+  movableColumns: true
+};
+
 class CoreFeature {
   constructor(table) {
     this.table = table;
@@ -82,745 +135,143 @@ class CoreFeature {
   }
 }
 
-class Helpers {
-  static elVisible(el) {
-    return !(el.offsetWidth <= 0 && el.offsetHeight <= 0);
-  }
-  static elOffset(el) {
-    var box = el.getBoundingClientRect();
-    return {
-      top: box.top + window.pageYOffset - document.documentElement.clientTop,
-      left: box.left + window.pageXOffset - document.documentElement.clientLeft
-    };
-  }
-  static deepClone(obj, clone, list = []) {
-    var objectProto = {}.__proto__, arrayProto = [].__proto__;
-    if (!clone) {
-      clone = Object.assign(Array.isArray(obj) ? [] : {}, obj);
-    }
-    for (var i in obj) {
-      let subject = obj[i], match, copy;
-      if (subject != null && typeof subject === "object" && (subject.__proto__ === objectProto || subject.__proto__ === arrayProto)) {
-        match = list.findIndex((item) => {
-          return item.subject === subject;
-        });
-        if (match > -1) {
-          clone[i] = list[match].copy;
-        } else {
-          copy = Object.assign(Array.isArray(subject) ? [] : {}, subject);
-          list.unshift({ subject, copy });
-          clone[i] = this.deepClone(subject, copy, list);
-        }
-      }
-    }
-    return clone;
-  }
-}
-
-let Popup$1 = class Popup extends CoreFeature {
-  constructor(table, element, parent) {
-    super(table);
-    this.element = element;
-    this.container = this._lookupContainer();
-    this.parent = parent;
-    this.reversedX = false;
-    this.childPopup = null;
-    this.blurable = false;
-    this.blurCallback = null;
-    this.blurEventsBound = false;
-    this.renderedCallback = null;
-    this.visible = false;
-    this.hideable = true;
-    this.element.classList.add("tabulator-popup-container");
-    this.blurEvent = this.hide.bind(this, false);
-    this.escEvent = this._escapeCheck.bind(this);
-    this.destroyBinding = this.tableDestroyed;
-    this.destroyed = false;
-  }
-  tableDestroyed() {
-    this.destroyed = true;
-    this.hide(true);
-  }
-  _lookupContainer() {
-    var container = this.table.options.popupContainer;
-    if (typeof container === "string") {
-      container = document.querySelector(container);
-      if (!container) {
-        console.warn("Menu Error - no container element found matching selector:", this.table.options.popupContainer, "(defaulting to document body)");
-      }
-    } else if (container === true) {
-      container = this.table.element;
-    }
-    if (container && !this._checkContainerIsParent(container)) {
-      container = false;
-      console.warn("Menu Error - container element does not contain this table:", this.table.options.popupContainer, "(defaulting to document body)");
-    }
-    if (!container) {
-      container = document.body;
-    }
-    return container;
-  }
-  _checkContainerIsParent(container, element = this.table.element) {
-    if (container === element) {
-      return true;
-    } else {
-      return element.parentNode ? this._checkContainerIsParent(container, element.parentNode) : false;
-    }
-  }
-  renderCallback(callback) {
-    this.renderedCallback = callback;
-  }
-  containerEventCoords(e) {
-    var touch = !(e instanceof MouseEvent);
-    var x = touch ? e.touches[0].pageX : e.pageX;
-    var y = touch ? e.touches[0].pageY : e.pageY;
-    if (this.container !== document.body) {
-      let parentOffset = Helpers.elOffset(this.container);
-      x -= parentOffset.left;
-      y -= parentOffset.top;
-    }
-    return { x, y };
-  }
-  elementPositionCoords(element, position = "right") {
-    var offset = Helpers.elOffset(element), containerOffset, x, y;
-    if (this.container !== document.body) {
-      containerOffset = Helpers.elOffset(this.container);
-      offset.left -= containerOffset.left;
-      offset.top -= containerOffset.top;
-    }
-    switch (position) {
-      case "right":
-        x = offset.left + element.offsetWidth;
-        y = offset.top - 1;
-        break;
-      case "bottom":
-        x = offset.left;
-        y = offset.top + element.offsetHeight;
-        break;
-      case "left":
-        x = offset.left;
-        y = offset.top - 1;
-        break;
-      case "top":
-        x = offset.left;
-        y = offset.top;
-        break;
-      case "center":
-        x = offset.left + element.offsetWidth / 2;
-        y = offset.top + element.offsetHeight / 2;
-        break;
-    }
-    return { x, y, offset };
-  }
-  show(origin, position) {
-    var x, y, parentEl, parentOffset, coords;
-    if (this.destroyed || this.table.destroyed) {
-      return this;
-    }
-    if (origin instanceof HTMLElement) {
-      parentEl = origin;
-      coords = this.elementPositionCoords(origin, position);
-      parentOffset = coords.offset;
-      x = coords.x;
-      y = coords.y;
-    } else if (typeof origin === "number") {
-      parentOffset = { top: 0, left: 0 };
-      x = origin;
-      y = position;
-    } else {
-      coords = this.containerEventCoords(origin);
-      x = coords.x;
-      y = coords.y;
-      this.reversedX = false;
-    }
-    this.element.style.top = y + "px";
-    this.element.style.left = x + "px";
-    this.container.appendChild(this.element);
-    if (typeof this.renderedCallback === "function") {
-      this.renderedCallback();
-    }
-    this._fitToScreen(x, y, parentEl, parentOffset, position);
-    this.visible = true;
-    this.subscribe("table-destroy", this.destroyBinding);
-    this.element.addEventListener("mousedown", (e) => {
-      e.stopPropagation();
-    });
-    return this;
-  }
-  _fitToScreen(x, y, parentEl, parentOffset, position) {
-    var scrollTop = this.container === document.body ? document.documentElement.scrollTop : this.container.scrollTop;
-    if (x + this.element.offsetWidth >= this.container.offsetWidth || this.reversedX) {
-      this.element.style.left = "";
-      if (parentEl) {
-        this.element.style.right = this.container.offsetWidth - parentOffset.left + "px";
-      } else {
-        this.element.style.right = this.container.offsetWidth - x + "px";
-      }
-      this.reversedX = true;
-    }
-    if (y + this.element.offsetHeight > Math.max(this.container.offsetHeight, scrollTop ? this.container.scrollHeight : 0)) {
-      if (parentEl) {
-        switch (position) {
-          case "bottom":
-            this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight - parentEl.offsetHeight - 1 + "px";
-            break;
-          default:
-            this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight + parentEl.offsetHeight + 1 + "px";
-        }
-      } else {
-        this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight + "px";
-      }
-    }
-  }
-  isVisible() {
-    return this.visible;
-  }
-  hideOnBlur(callback) {
-    this.blurable = true;
-    if (this.visible) {
-      setTimeout(() => {
-        if (this.visible) {
-          this.table.rowManager.element.addEventListener("scroll", this.blurEvent);
-          this.subscribe("cell-editing", this.blurEvent);
-          document.body.addEventListener("click", this.blurEvent);
-          document.body.addEventListener("contextmenu", this.blurEvent);
-          document.body.addEventListener("mousedown", this.blurEvent);
-          window.addEventListener("resize", this.blurEvent);
-          document.body.addEventListener("keydown", this.escEvent);
-          this.blurEventsBound = true;
-        }
-      }, 100);
-      this.blurCallback = callback;
-    }
-    return this;
-  }
-  _escapeCheck(e) {
-    if (e.keyCode == 27) {
-      this.hide();
-    }
-  }
-  blockHide() {
-    this.hideable = false;
-  }
-  restoreHide() {
-    this.hideable = true;
-  }
-  hide(silent = false) {
-    if (this.visible && this.hideable) {
-      if (this.blurable && this.blurEventsBound) {
-        document.body.removeEventListener("keydown", this.escEvent);
-        document.body.removeEventListener("click", this.blurEvent);
-        document.body.removeEventListener("contextmenu", this.blurEvent);
-        document.body.removeEventListener("mousedown", this.blurEvent);
-        window.removeEventListener("resize", this.blurEvent);
-        this.table.rowManager.element.removeEventListener("scroll", this.blurEvent);
-        this.unsubscribe("cell-editing", this.blurEvent);
-        this.blurEventsBound = false;
-      }
-      if (this.childPopup) {
-        this.childPopup.hide();
-      }
-      if (this.parent) {
-        this.parent.childPopup = null;
-      }
-      if (this.element.parentNode) {
-        this.element.parentNode.removeChild(this.element);
-      }
-      this.visible = false;
-      if (this.blurCallback && !silent) {
-        this.blurCallback();
-      }
-      this.unsubscribe("table-destroy", this.destroyBinding);
-    }
-    return this;
-  }
-  child(element) {
-    if (this.childPopup) {
-      this.childPopup.hide();
-    }
-    this.childPopup = new Popup$1(this.table, element, this);
-    return this.childPopup;
-  }
-};
-
-class Module extends CoreFeature {
-  constructor(table, name) {
-    super(table);
-    this._handler = null;
-  }
-  initialize() {
-  }
-  registerTableOption(key, value) {
-    this.table.optionsList.register(key, value);
-  }
-  registerColumnOption(key, value) {
-    this.table.columnManager.optionsList.register(key, value);
-  }
-  registerTableFunction(name, func) {
-    if (typeof this.table[name] === "undefined") {
-      this.table[name] = (...args) => {
-        this.table.initGuard(name);
-        return func(...args);
-      };
-    } else {
-      console.warn("Unable to bind table function, name already in use", name);
-    }
-  }
-  registerComponentFunction(component, func, handler) {
-    return this.table.componentFunctionBinder.bind(component, func, handler);
-  }
-  registerDataHandler(handler, priority) {
-    this.table.rowManager.registerDataPipelineHandler(handler, priority);
-    this._handler = handler;
-  }
-  registerDisplayHandler(handler, priority) {
-    this.table.rowManager.registerDisplayPipelineHandler(handler, priority);
-    this._handler = handler;
-  }
-  displayRows(adjust) {
-    var index = this.table.rowManager.displayRows.length - 1, lookupIndex;
-    if (this._handler) {
-      lookupIndex = this.table.rowManager.displayPipeline.findIndex((item) => {
-        return item.handler === this._handler;
-      });
-      if (lookupIndex > -1) {
-        index = lookupIndex;
-      }
-    }
-    if (adjust) {
-      index = index + adjust;
-    }
-    if (this._handler) {
-      if (index > -1) {
-        return this.table.rowManager.getDisplayRows(index);
-      } else {
-        return this.activeRows();
-      }
-    }
-  }
-  activeRows() {
-    return this.table.rowManager.activeRows;
-  }
-  refreshData(renderInPosition, handler) {
-    if (!handler) {
-      handler = this._handler;
-    }
-    if (handler) {
-      this.table.rowManager.refreshActiveData(handler, false, renderInPosition);
-    }
-  }
-  footerAppend(element) {
-    return this.table.footerManager.append(element);
-  }
-  footerPrepend(element) {
-    return this.table.footerManager.prepend(element);
-  }
-  footerRemove(element) {
-    return this.table.footerManager.remove(element);
-  }
-  popup(menuEl, menuContainer) {
-    return new Popup$1(this.table, menuEl, menuContainer);
-  }
-  alert(content, type) {
-    return this.table.alertManager.alert(content, type);
-  }
-  clearAlert() {
-    return this.table.alertManager.clear();
-  }
-}
-
-var defaultAccessors = {};
-
-class Accessor extends Module {
-  constructor(table) {
-    super(table);
-    this.allowedTypes = ["", "data", "download", "clipboard", "print", "htmlOutput"];
-    this.registerColumnOption("accessor");
-    this.registerColumnOption("accessorParams");
-    this.registerColumnOption("accessorData");
-    this.registerColumnOption("accessorDataParams");
-    this.registerColumnOption("accessorDownload");
-    this.registerColumnOption("accessorDownloadParams");
-    this.registerColumnOption("accessorClipboard");
-    this.registerColumnOption("accessorClipboardParams");
-    this.registerColumnOption("accessorPrint");
-    this.registerColumnOption("accessorPrintParams");
-    this.registerColumnOption("accessorHtmlOutput");
-    this.registerColumnOption("accessorHtmlOutputParams");
-  }
-  initialize() {
-    this.subscribe("column-layout", this.initializeColumn.bind(this));
-    this.subscribe("row-data-retrieve", this.transformRow.bind(this));
-  }
-  initializeColumn(column) {
-    var match = false, config = {};
-    this.allowedTypes.forEach((type) => {
-      var key = "accessor" + (type.charAt(0).toUpperCase() + type.slice(1)), accessor;
-      if (column.definition[key]) {
-        accessor = this.lookupAccessor(column.definition[key]);
-        if (accessor) {
-          match = true;
-          config[key] = {
-            accessor,
-            params: column.definition[key + "Params"] || {}
-          };
-        }
-      }
-    });
-    if (match) {
-      column.modules.accessor = config;
-    }
-  }
-  lookupAccessor(value) {
-    var accessor = false;
-    switch (typeof value) {
-      case "string":
-        if (Accessor.accessors[value]) {
-          accessor = Accessor.accessors[value];
-        } else {
-          console.warn("Accessor Error - No such accessor found, ignoring: ", value);
-        }
-        break;
-      case "function":
-        accessor = value;
-        break;
-    }
-    return accessor;
-  }
-  transformRow(row, type) {
-    var key = "accessor" + (type.charAt(0).toUpperCase() + type.slice(1)), rowComponent = row.getComponent();
-    var data = Helpers.deepClone(row.data || {});
-    this.table.columnManager.traverse(function(column) {
-      var value, accessor, params, colComponent;
-      if (column.modules.accessor) {
-        accessor = column.modules.accessor[key] || column.modules.accessor.accessor || false;
-        if (accessor) {
-          value = column.getFieldValue(data);
-          if (value != "undefined") {
-            colComponent = column.getComponent();
-            params = typeof accessor.params === "function" ? accessor.params(value, data, type, colComponent, rowComponent) : accessor.params;
-            column.setFieldValue(data, accessor.accessor(value, data, type, params, colComponent, rowComponent));
-          }
-        }
-      }
-    });
-    return data;
-  }
-}
-Accessor.moduleName = "accessor";
-Accessor.accessors = defaultAccessors;
-
-var defaultPasteActions = {
-  replace: function(rows) {
-    return this.table.setData(rows);
-  },
-  update: function(rows) {
-    return this.table.updateOrAddData(rows);
-  },
-  insert: function(rows) {
-    return this.table.addData(rows);
-  }
-};
-
-var defaultPasteParsers = {
-  table: function(clipboard) {
-    var data = [], headerFindSuccess = true, columns = this.table.columnManager.columns, columnMap = [], rows = [];
-    clipboard = clipboard.split("\n");
-    clipboard.forEach(function(row) {
-      data.push(row.split("	"));
-    });
-    if (data.length && !(data.length === 1 && data[0].length < 2)) {
-      data[0].forEach(function(value) {
-        var column = columns.find(function(column2) {
-          return value && column2.definition.title && value.trim() && column2.definition.title.trim() === value.trim();
-        });
-        if (column) {
-          columnMap.push(column);
-        } else {
-          headerFindSuccess = false;
-        }
-      });
-      if (!headerFindSuccess) {
-        headerFindSuccess = true;
-        columnMap = [];
-        data[0].forEach(function(value) {
-          var column = columns.find(function(column2) {
-            return value && column2.field && value.trim() && column2.field.trim() === value.trim();
-          });
-          if (column) {
-            columnMap.push(column);
-          } else {
-            headerFindSuccess = false;
-          }
-        });
-        if (!headerFindSuccess) {
-          columnMap = this.table.columnManager.columnsByIndex;
-        }
-      }
-      if (headerFindSuccess) {
-        data.shift();
-      }
-      data.forEach(function(item) {
-        var row = {};
-        item.forEach(function(value, i) {
-          if (columnMap[i]) {
-            row[columnMap[i].field] = value;
-          }
-        });
-        rows.push(row);
-      });
-      return rows;
-    } else {
-      return false;
-    }
-  }
-};
-
-class Clipboard extends Module {
-  constructor(table) {
-    super(table);
-    this.mode = true;
-    this.pasteParser = function() {
-    };
-    this.pasteAction = function() {
-    };
-    this.customSelection = false;
-    this.rowRange = false;
-    this.blocked = true;
-    this.registerTableOption("clipboard", false);
-    this.registerTableOption("clipboardCopyStyled", true);
-    this.registerTableOption("clipboardCopyConfig", false);
-    this.registerTableOption("clipboardCopyFormatter", false);
-    this.registerTableOption("clipboardCopyRowRange", "active");
-    this.registerTableOption("clipboardPasteParser", "table");
-    this.registerTableOption("clipboardPasteAction", "insert");
-    this.registerColumnOption("clipboard");
-    this.registerColumnOption("titleClipboard");
-  }
-  initialize() {
-    this.mode = this.table.options.clipboard;
-    this.rowRange = this.table.options.clipboardCopyRowRange;
-    if (this.mode === true || this.mode === "copy") {
-      this.table.element.addEventListener("copy", (e) => {
-        var plain, html, list;
-        if (!this.blocked) {
-          e.preventDefault();
-          if (this.customSelection) {
-            plain = this.customSelection;
-            if (this.table.options.clipboardCopyFormatter) {
-              plain = this.table.options.clipboardCopyFormatter("plain", plain);
-            }
-          } else {
-            list = this.table.modules.export.generateExportList(this.table.options.clipboardCopyConfig, this.table.options.clipboardCopyStyled, this.rowRange, "clipboard");
-            html = this.table.modules.export.generateHTMLTable(list);
-            plain = html ? this.generatePlainContent(list) : "";
-            if (this.table.options.clipboardCopyFormatter) {
-              plain = this.table.options.clipboardCopyFormatter("plain", plain);
-              html = this.table.options.clipboardCopyFormatter("html", html);
-            }
-          }
-          if (window.clipboardData && window.clipboardData.setData) {
-            window.clipboardData.setData("Text", plain);
-          } else if (e.clipboardData && e.clipboardData.setData) {
-            e.clipboardData.setData("text/plain", plain);
-            if (html) {
-              e.clipboardData.setData("text/html", html);
-            }
-          } else if (e.originalEvent && e.originalEvent.clipboardData.setData) {
-            e.originalEvent.clipboardData.setData("text/plain", plain);
-            if (html) {
-              e.originalEvent.clipboardData.setData("text/html", html);
-            }
-          }
-          this.dispatchExternal("clipboardCopied", plain, html);
-          this.reset();
-        }
-      });
-    }
-    if (this.mode === true || this.mode === "paste") {
-      this.table.element.addEventListener("paste", (e) => {
-        this.paste(e);
-      });
-    }
-    this.setPasteParser(this.table.options.clipboardPasteParser);
-    this.setPasteAction(this.table.options.clipboardPasteAction);
-    this.registerTableFunction("copyToClipboard", this.copy.bind(this));
-  }
-  reset() {
-    this.blocked = true;
-    this.customSelection = false;
-  }
-  generatePlainContent(list) {
-    var output = [];
-    list.forEach((row) => {
-      var rowData = [];
-      row.columns.forEach((col) => {
-        var value = "";
-        if (col) {
-          if (row.type === "group") {
-            col.value = col.component.getKey();
-          }
-          if (col.value === null) {
-            value = "";
-          } else {
-            switch (typeof col.value) {
-              case "object":
-                value = JSON.stringify(col.value);
-                break;
-              case "undefined":
-                value = "";
-                break;
-              default:
-                value = col.value;
-            }
-          }
-        }
-        rowData.push(value);
-      });
-      output.push(rowData.join("	"));
-    });
-    return output.join("\n");
-  }
-  copy(range, internal) {
-    var sel, textRange;
-    this.blocked = false;
-    this.customSelection = false;
-    if (this.mode === true || this.mode === "copy") {
-      this.rowRange = range || this.table.options.clipboardCopyRowRange;
-      if (typeof window.getSelection != "undefined" && typeof document.createRange != "undefined") {
-        range = document.createRange();
-        range.selectNodeContents(this.table.element);
-        sel = window.getSelection();
-        if (sel.toString() && internal) {
-          this.customSelection = sel.toString();
-        }
-        sel.removeAllRanges();
-        sel.addRange(range);
-      } else if (typeof document.selection != "undefined" && typeof document.body.createTextRange != "undefined") {
-        textRange = document.body.createTextRange();
-        textRange.moveToElementText(this.table.element);
-        textRange.select();
-      }
-      document.execCommand("copy");
-      if (sel) {
-        sel.removeAllRanges();
-      }
-    }
-  }
-  setPasteAction(action) {
-    switch (typeof action) {
-      case "string":
-        this.pasteAction = Clipboard.pasteActions[action];
-        if (!this.pasteAction) {
-          console.warn("Clipboard Error - No such paste action found:", action);
-        }
-        break;
-      case "function":
-        this.pasteAction = action;
-        break;
-    }
-  }
-  setPasteParser(parser) {
-    switch (typeof parser) {
-      case "string":
-        this.pasteParser = Clipboard.pasteParsers[parser];
-        if (!this.pasteParser) {
-          console.warn("Clipboard Error - No such paste parser found:", parser);
-        }
-        break;
-      case "function":
-        this.pasteParser = parser;
-        break;
-    }
-  }
-  paste(e) {
-    var data, rowData, rows;
-    if (this.checkPaseOrigin(e)) {
-      data = this.getPasteData(e);
-      rowData = this.pasteParser.call(this, data);
-      if (rowData) {
-        e.preventDefault();
-        if (this.table.modExists("mutator")) {
-          rowData = this.mutateData(rowData);
-        }
-        rows = this.pasteAction.call(this, rowData);
-        this.dispatchExternal("clipboardPasted", data, rowData, rows);
-      } else {
-        this.dispatchExternal("clipboardPasteError", data);
-      }
-    }
-  }
-  mutateData(data) {
-    var output = [];
-    if (Array.isArray(data)) {
-      data.forEach((row) => {
-        output.push(this.table.modules.mutator.transformRow(row, "clipboard"));
-      });
-    } else {
-      output = data;
-    }
-    return output;
-  }
-  checkPaseOrigin(e) {
-    var valid = true;
-    if (e.target.tagName != "DIV" || this.table.modules.edit.currentCell) {
-      valid = false;
-    }
-    return valid;
-  }
-  getPasteData(e) {
-    var data;
-    if (window.clipboardData && window.clipboardData.getData) {
-      data = window.clipboardData.getData("Text");
-    } else if (e.clipboardData && e.clipboardData.getData) {
-      data = e.clipboardData.getData("text/plain");
-    } else if (e.originalEvent && e.originalEvent.clipboardData.getData) {
-      data = e.originalEvent.clipboardData.getData("text/plain");
-    }
-    return data;
-  }
-}
-Clipboard.moduleName = "clipboard";
-Clipboard.pasteActions = defaultPasteActions;
-Clipboard.pasteParsers = defaultPasteParsers;
-
-class CalcComponent {
-  constructor(row) {
-    this._row = row;
+class ColumnComponent {
+  constructor(column) {
+    this._column = column;
+    this.type = "ColumnComponent";
     return new Proxy(this, {
       get: function(target, name, receiver) {
         if (typeof target[name] !== "undefined") {
           return target[name];
         } else {
-          return target._row.table.componentFunctionBinder.handle("row", target._row, name);
+          return target._column.table.componentFunctionBinder.handle("column", target._column, name);
         }
       }
     });
   }
-  getData(transform) {
-    return this._row.getData(transform);
-  }
   getElement() {
-    return this._row.getElement();
+    return this._column.getElement();
   }
-  getTable() {
-    return this._row.table;
+  getDefinition() {
+    return this._column.getDefinition();
+  }
+  getField() {
+    return this._column.getField();
+  }
+  getTitleDownload() {
+    return this._column.getTitleDownload();
   }
   getCells() {
     var cells = [];
-    this._row.getCells().forEach(function(cell) {
+    this._column.cells.forEach(function(cell) {
       cells.push(cell.getComponent());
     });
     return cells;
   }
-  getCell(column) {
-    var cell = this._row.getCell(column);
-    return cell ? cell.getComponent() : false;
+  isVisible() {
+    return this._column.visible;
+  }
+  show() {
+    if (this._column.isGroup) {
+      this._column.columns.forEach(function(column) {
+        column.show();
+      });
+    } else {
+      this._column.show();
+    }
+  }
+  hide() {
+    if (this._column.isGroup) {
+      this._column.columns.forEach(function(column) {
+        column.hide();
+      });
+    } else {
+      this._column.hide();
+    }
+  }
+  toggle() {
+    if (this._column.visible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+  delete() {
+    return this._column.delete();
+  }
+  getSubColumns() {
+    var output = [];
+    if (this._column.columns.length) {
+      this._column.columns.forEach(function(column) {
+        output.push(column.getComponent());
+      });
+    }
+    return output;
+  }
+  getParentColumn() {
+    return this._column.parent instanceof Column ? this._column.parent.getComponent() : false;
   }
   _getSelf() {
-    return this._row;
+    return this._column;
+  }
+  scrollTo() {
+    return this._column.table.columnManager.scrollToColumn(this._column);
+  }
+  getTable() {
+    return this._column.table;
+  }
+  move(to, after) {
+    var toColumn = this._column.table.columnManager.findColumn(to);
+    if (toColumn) {
+      this._column.table.columnManager.moveColumn(this._column, toColumn, after);
+    } else {
+      console.warn("Move Error - No matching column found:", toColumn);
+    }
+  }
+  getNextColumn() {
+    var nextCol = this._column.nextColumn();
+    return nextCol ? nextCol.getComponent() : false;
+  }
+  getPrevColumn() {
+    var prevCol = this._column.prevColumn();
+    return prevCol ? prevCol.getComponent() : false;
+  }
+  updateDefinition(updates) {
+    return this._column.updateDefinition(updates);
+  }
+  getWidth() {
+    return this._column.getWidth();
+  }
+  setWidth(width) {
+    var result;
+    if (width === true) {
+      result = this._column.reinitializeWidth(true);
+    } else {
+      result = this._column.setWidth(width);
+    }
+    this._column.table.columnManager.rerenderColumns(true);
+    return result;
   }
 }
+
+var defaultColumnOptions = {
+  title: void 0,
+  field: void 0,
+  columns: void 0,
+  visible: void 0,
+  hozAlign: void 0,
+  vertAlign: void 0,
+  width: void 0,
+  minWidth: 40,
+  maxWidth: void 0,
+  maxInitialWidth: void 0,
+  cssClass: void 0,
+  variableHeight: void 0,
+  headerVertical: void 0,
+  headerHozAlign: void 0,
+  headerWordWrap: false,
+  editableTitle: void 0
+};
 
 class CellComponent {
   constructor(cell) {
@@ -1090,144 +541,6 @@ class Cell extends CoreFeature {
     return this.component;
   }
 }
-
-class ColumnComponent {
-  constructor(column) {
-    this._column = column;
-    this.type = "ColumnComponent";
-    return new Proxy(this, {
-      get: function(target, name, receiver) {
-        if (typeof target[name] !== "undefined") {
-          return target[name];
-        } else {
-          return target._column.table.componentFunctionBinder.handle("column", target._column, name);
-        }
-      }
-    });
-  }
-  getElement() {
-    return this._column.getElement();
-  }
-  getDefinition() {
-    return this._column.getDefinition();
-  }
-  getField() {
-    return this._column.getField();
-  }
-  getTitleDownload() {
-    return this._column.getTitleDownload();
-  }
-  getCells() {
-    var cells = [];
-    this._column.cells.forEach(function(cell) {
-      cells.push(cell.getComponent());
-    });
-    return cells;
-  }
-  isVisible() {
-    return this._column.visible;
-  }
-  show() {
-    if (this._column.isGroup) {
-      this._column.columns.forEach(function(column) {
-        column.show();
-      });
-    } else {
-      this._column.show();
-    }
-  }
-  hide() {
-    if (this._column.isGroup) {
-      this._column.columns.forEach(function(column) {
-        column.hide();
-      });
-    } else {
-      this._column.hide();
-    }
-  }
-  toggle() {
-    if (this._column.visible) {
-      this.hide();
-    } else {
-      this.show();
-    }
-  }
-  delete() {
-    return this._column.delete();
-  }
-  getSubColumns() {
-    var output = [];
-    if (this._column.columns.length) {
-      this._column.columns.forEach(function(column) {
-        output.push(column.getComponent());
-      });
-    }
-    return output;
-  }
-  getParentColumn() {
-    return this._column.parent instanceof Column ? this._column.parent.getComponent() : false;
-  }
-  _getSelf() {
-    return this._column;
-  }
-  scrollTo() {
-    return this._column.table.columnManager.scrollToColumn(this._column);
-  }
-  getTable() {
-    return this._column.table;
-  }
-  move(to, after) {
-    var toColumn = this._column.table.columnManager.findColumn(to);
-    if (toColumn) {
-      this._column.table.columnManager.moveColumn(this._column, toColumn, after);
-    } else {
-      console.warn("Move Error - No matching column found:", toColumn);
-    }
-  }
-  getNextColumn() {
-    var nextCol = this._column.nextColumn();
-    return nextCol ? nextCol.getComponent() : false;
-  }
-  getPrevColumn() {
-    var prevCol = this._column.prevColumn();
-    return prevCol ? prevCol.getComponent() : false;
-  }
-  updateDefinition(updates) {
-    return this._column.updateDefinition(updates);
-  }
-  getWidth() {
-    return this._column.getWidth();
-  }
-  setWidth(width) {
-    var result;
-    if (width === true) {
-      result = this._column.reinitializeWidth(true);
-    } else {
-      result = this._column.setWidth(width);
-    }
-    this._column.table.columnManager.rerenderColumns(true);
-    return result;
-  }
-}
-
-var defaultColumnOptions = {
-  title: void 0,
-  field: void 0,
-  columns: void 0,
-  visible: void 0,
-  hozAlign: void 0,
-  vertAlign: void 0,
-  width: void 0,
-  minWidth: 40,
-  maxWidth: void 0,
-  maxInitialWidth: void 0,
-  cssClass: void 0,
-  variableHeight: void 0,
-  headerVertical: void 0,
-  headerHozAlign: void 0,
-  headerWordWrap: false,
-  editableTitle: void 0
-};
 
 class Column extends CoreFeature {
   constructor(def, parent) {
@@ -1902,6 +1215,1145 @@ class Column extends CoreFeature {
 }
 Column.defaultOptionList = defaultColumnOptions;
 
+class Helpers {
+  static elVisible(el) {
+    return !(el.offsetWidth <= 0 && el.offsetHeight <= 0);
+  }
+  static elOffset(el) {
+    var box = el.getBoundingClientRect();
+    return {
+      top: box.top + window.pageYOffset - document.documentElement.clientTop,
+      left: box.left + window.pageXOffset - document.documentElement.clientLeft
+    };
+  }
+  static deepClone(obj, clone, list = []) {
+    var objectProto = {}.__proto__, arrayProto = [].__proto__;
+    if (!clone) {
+      clone = Object.assign(Array.isArray(obj) ? [] : {}, obj);
+    }
+    for (var i in obj) {
+      let subject = obj[i], match, copy;
+      if (subject != null && typeof subject === "object" && (subject.__proto__ === objectProto || subject.__proto__ === arrayProto)) {
+        match = list.findIndex((item) => {
+          return item.subject === subject;
+        });
+        if (match > -1) {
+          clone[i] = list[match].copy;
+        } else {
+          copy = Object.assign(Array.isArray(subject) ? [] : {}, subject);
+          list.unshift({ subject, copy });
+          clone[i] = this.deepClone(subject, copy, list);
+        }
+      }
+    }
+    return clone;
+  }
+}
+
+class OptionsList {
+  constructor(table, msgType, defaults = {}) {
+    this.table = table;
+    this.msgType = msgType;
+    this.registeredDefaults = Object.assign({}, defaults);
+  }
+  register(option, value) {
+    this.registeredDefaults[option] = value;
+  }
+  generate(defaultOptions, userOptions = {}) {
+    var output = Object.assign({}, this.registeredDefaults);
+    Object.assign(output, defaultOptions);
+    if (userOptions.debugInvalidOptions !== false || this.table.options.debugInvalidOptions) {
+      for (let key in userOptions) {
+        if (!output.hasOwnProperty(key)) {
+          console.warn("Invalid " + this.msgType + " option:", key);
+        }
+      }
+    }
+    for (let key in output) {
+      if (key in userOptions) {
+        output[key] = userOptions[key];
+      } else {
+        if (Array.isArray(output[key])) {
+          output[key] = Object.assign([], output[key]);
+        } else if (typeof output[key] === "object" && output[key] !== null) {
+          output[key] = Object.assign({}, output[key]);
+        } else if (typeof output[key] === "undefined") {
+          delete output[key];
+        }
+      }
+    }
+    return output;
+  }
+}
+
+class Renderer extends CoreFeature {
+  constructor(table) {
+    super(table);
+    this.elementVertical = table.rowManager.element;
+    this.elementHorizontal = table.columnManager.element;
+    this.tableElement = table.rowManager.tableElement;
+    this.verticalFillMode = "fit";
+  }
+  initialize() {
+  }
+  clearRows() {
+  }
+  clearColumns() {
+  }
+  reinitializeColumnWidths(columns) {
+  }
+  renderRows() {
+  }
+  renderColumns() {
+  }
+  rerenderRows(callback) {
+    if (callback) {
+      callback();
+    }
+  }
+  rerenderColumns(update, blockRedraw) {
+  }
+  renderRowCells(row) {
+  }
+  rerenderRowCells(row, force) {
+  }
+  scrollColumns(left, dir) {
+  }
+  scrollRows(top, dir) {
+  }
+  resize() {
+  }
+  scrollToRow(row) {
+  }
+  scrollToRowNearestTop(row) {
+  }
+  visibleRows(includingBuffer) {
+    return [];
+  }
+  rows() {
+    return this.table.rowManager.getDisplayRows();
+  }
+  styleRow(row, index) {
+    var rowEl = row.getElement();
+    if (index % 2) {
+      rowEl.classList.add("tabulator-row-even");
+      rowEl.classList.remove("tabulator-row-odd");
+    } else {
+      rowEl.classList.add("tabulator-row-odd");
+      rowEl.classList.remove("tabulator-row-even");
+    }
+  }
+  clear() {
+    this.clearRows();
+    this.clearColumns();
+  }
+  render() {
+    this.renderRows();
+    this.renderColumns();
+  }
+  rerender(callback) {
+    this.rerenderRows();
+    this.rerenderColumns();
+  }
+  scrollToRowPosition(row, position, ifVisible) {
+    var rowIndex = this.rows().indexOf(row), rowEl = row.getElement(), offset = 0;
+    return new Promise((resolve, reject) => {
+      if (rowIndex > -1) {
+        if (typeof ifVisible === "undefined") {
+          ifVisible = this.table.options.scrollToRowIfVisible;
+        }
+        if (!ifVisible) {
+          if (Helpers.elVisible(rowEl)) {
+            offset = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top;
+            if (offset > 0 && offset < this.elementVertical.clientHeight - rowEl.offsetHeight) {
+              resolve();
+              return false;
+            }
+          }
+        }
+        if (typeof position === "undefined") {
+          position = this.table.options.scrollToRowPosition;
+        }
+        if (position === "nearest") {
+          position = this.scrollToRowNearestTop(row) ? "top" : "bottom";
+        }
+        this.scrollToRow(row);
+        switch (position) {
+          case "middle":
+          case "center":
+            if (this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight) {
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop + (rowEl.offsetTop - this.elementVertical.scrollTop) - (this.elementVertical.scrollHeight - rowEl.offsetTop) / 2;
+            } else {
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight / 2;
+            }
+            break;
+          case "bottom":
+            if (this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight) {
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.scrollHeight - rowEl.offsetTop) + rowEl.offsetHeight;
+            } else {
+              this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight + rowEl.offsetHeight;
+            }
+            break;
+          case "top":
+            this.elementVertical.scrollTop = rowEl.offsetTop;
+            break;
+        }
+        resolve();
+      } else {
+        console.warn("Scroll Error - Row not visible");
+        reject("Scroll Error - Row not visible");
+      }
+    });
+  }
+}
+
+class BasicHorizontal extends Renderer {
+  constructor(table) {
+    super(table);
+  }
+  renderRowCells(row) {
+    row.cells.forEach((cell) => {
+      row.element.appendChild(cell.getElement());
+      cell.cellRendered();
+    });
+  }
+  reinitializeColumnWidths(columns) {
+    columns.forEach(function(column) {
+      column.reinitializeWidth();
+    });
+  }
+}
+
+class VirtualDomHorizontal extends Renderer {
+  constructor(table) {
+    super(table);
+    this.leftCol = 0;
+    this.rightCol = 0;
+    this.scrollLeft = 0;
+    this.vDomScrollPosLeft = 0;
+    this.vDomScrollPosRight = 0;
+    this.vDomPadLeft = 0;
+    this.vDomPadRight = 0;
+    this.fitDataColAvg = 0;
+    this.windowBuffer = 200;
+    this.visibleRows = null;
+    this.initialized = false;
+    this.isFitData = false;
+    this.columns = [];
+  }
+  initialize() {
+    this.compatibilityCheck();
+    this.layoutCheck();
+    this.vertScrollListen();
+  }
+  compatibilityCheck() {
+    if (this.options("layout") == "fitDataTable") {
+      console.warn("Horizontal Virtual DOM is not compatible with fitDataTable layout mode");
+    }
+    if (this.options("responsiveLayout")) {
+      console.warn("Horizontal Virtual DOM is not compatible with responsive columns");
+    }
+    if (this.options("rtl")) {
+      console.warn("Horizontal Virtual DOM is not currently compatible with RTL text direction");
+    }
+  }
+  layoutCheck() {
+    this.isFitData = this.options("layout").startsWith("fitData");
+  }
+  vertScrollListen() {
+    this.subscribe("scroll-vertical", this.clearVisRowCache.bind(this));
+    this.subscribe("data-refreshed", this.clearVisRowCache.bind(this));
+  }
+  clearVisRowCache() {
+    this.visibleRows = null;
+  }
+  renderColumns(row, force) {
+    this.dataChange();
+  }
+  scrollColumns(left, dir) {
+    if (this.scrollLeft != left) {
+      this.scrollLeft = left;
+      this.scroll(left - (this.vDomScrollPosLeft + this.windowBuffer));
+    }
+  }
+  calcWindowBuffer() {
+    var buffer = this.elementVertical.clientWidth;
+    this.table.columnManager.columnsByIndex.forEach((column) => {
+      if (column.visible) {
+        var width = column.getWidth();
+        if (width > buffer) {
+          buffer = width;
+        }
+      }
+    });
+    this.windowBuffer = buffer * 2;
+  }
+  rerenderColumns(update, blockRedraw) {
+    var old = {
+      cols: this.columns,
+      leftCol: this.leftCol,
+      rightCol: this.rightCol
+    }, colPos = 0;
+    if (update && !this.initialized) {
+      return;
+    }
+    this.clear();
+    this.calcWindowBuffer();
+    this.scrollLeft = this.elementVertical.scrollLeft;
+    this.vDomScrollPosLeft = this.scrollLeft - this.windowBuffer;
+    this.vDomScrollPosRight = this.scrollLeft + this.elementVertical.clientWidth + this.windowBuffer;
+    this.table.columnManager.columnsByIndex.forEach((column) => {
+      var config = {}, width;
+      if (column.visible) {
+        if (!column.modules.frozen) {
+          width = column.getWidth();
+          config.leftPos = colPos;
+          config.rightPos = colPos + width;
+          config.width = width;
+          if (this.isFitData) {
+            config.fitDataCheck = column.modules.vdomHoz ? column.modules.vdomHoz.fitDataCheck : true;
+          }
+          if (colPos + width > this.vDomScrollPosLeft && colPos < this.vDomScrollPosRight) {
+            if (this.leftCol == -1) {
+              this.leftCol = this.columns.length;
+              this.vDomPadLeft = colPos;
+            }
+            this.rightCol = this.columns.length;
+          } else {
+            if (this.leftCol !== -1) {
+              this.vDomPadRight += width;
+            }
+          }
+          this.columns.push(column);
+          column.modules.vdomHoz = config;
+          colPos += width;
+        }
+      }
+    });
+    this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
+    this.tableElement.style.paddingRight = this.vDomPadRight + "px";
+    this.initialized = true;
+    if (!blockRedraw) {
+      if (!update || this.reinitChanged(old)) {
+        this.reinitializeRows();
+      }
+    }
+    this.elementVertical.scrollLeft = this.scrollLeft;
+  }
+  renderRowCells(row) {
+    if (this.initialized) {
+      this.initializeRow(row);
+    } else {
+      row.cells.forEach((cell) => {
+        row.element.appendChild(cell.getElement());
+        cell.cellRendered();
+      });
+    }
+  }
+  rerenderRowCells(row, force) {
+    this.reinitializeRow(row, force);
+  }
+  reinitializeColumnWidths(columns) {
+    for (let i = this.leftCol; i <= this.rightCol; i++) {
+      this.columns[i].reinitializeWidth();
+    }
+  }
+  deinitialize() {
+    this.initialized = false;
+  }
+  clear() {
+    this.columns = [];
+    this.leftCol = -1;
+    this.rightCol = 0;
+    this.vDomScrollPosLeft = 0;
+    this.vDomScrollPosRight = 0;
+    this.vDomPadLeft = 0;
+    this.vDomPadRight = 0;
+  }
+  dataChange() {
+    var change = false, row, rowEl;
+    if (this.isFitData) {
+      this.table.columnManager.columnsByIndex.forEach((column) => {
+        if (!column.definition.width && column.visible) {
+          change = true;
+        }
+      });
+      if (change && this.table.rowManager.getDisplayRows().length) {
+        this.vDomScrollPosRight = this.scrollLeft + this.elementVertical.clientWidth + this.windowBuffer;
+        row = this.chain("rows-sample", [1], [], () => {
+          return this.table.rowManager.getDisplayRows();
+        })[0];
+        if (row) {
+          rowEl = row.getElement();
+          row.generateCells();
+          this.tableElement.appendChild(rowEl);
+          for (let colEnd = 0; colEnd < row.cells.length; colEnd++) {
+            let cell = row.cells[colEnd];
+            rowEl.appendChild(cell.getElement());
+            cell.column.reinitializeWidth();
+          }
+          rowEl.parentNode.removeChild(rowEl);
+          this.rerenderColumns(false, true);
+        }
+      }
+    } else {
+      if (this.options("layout") === "fitColumns") {
+        this.layoutRefresh();
+        this.rerenderColumns(false, true);
+      }
+    }
+  }
+  reinitChanged(old) {
+    var match = true;
+    if (old.cols.length !== this.columns.length || old.leftCol !== this.leftCol || old.rightCol !== this.rightCol) {
+      return true;
+    }
+    old.cols.forEach((col, i) => {
+      if (col !== this.columns[i]) {
+        match = false;
+      }
+    });
+    return !match;
+  }
+  reinitializeRows() {
+    var visibleRows = this.getVisibleRows(), otherRows = this.table.rowManager.getRows().filter((row) => !visibleRows.includes(row));
+    visibleRows.forEach((row) => {
+      this.reinitializeRow(row, true);
+    });
+    otherRows.forEach((row) => {
+      row.deinitialize();
+    });
+  }
+  getVisibleRows() {
+    if (!this.visibleRows) {
+      this.visibleRows = this.table.rowManager.getVisibleRows();
+    }
+    return this.visibleRows;
+  }
+  scroll(diff) {
+    this.vDomScrollPosLeft += diff;
+    this.vDomScrollPosRight += diff;
+    if (Math.abs(diff) > this.windowBuffer / 2) {
+      this.rerenderColumns();
+    } else {
+      if (diff > 0) {
+        this.addColRight();
+        this.removeColLeft();
+      } else {
+        this.addColLeft();
+        this.removeColRight();
+      }
+    }
+  }
+  colPositionAdjust(start, end, diff) {
+    for (let i = start; i < end; i++) {
+      let column = this.columns[i];
+      column.modules.vdomHoz.leftPos += diff;
+      column.modules.vdomHoz.rightPos += diff;
+    }
+  }
+  addColRight() {
+    var changes = false, working = true;
+    while (working) {
+      let column = this.columns[this.rightCol + 1];
+      if (column) {
+        if (column.modules.vdomHoz.leftPos <= this.vDomScrollPosRight) {
+          changes = true;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              var cell = row.getCell(column);
+              row.getElement().insertBefore(cell.getElement(), row.getCell(this.columns[this.rightCol]).getElement().nextSibling);
+              cell.cellRendered();
+            }
+          });
+          this.fitDataColActualWidthCheck(column);
+          this.rightCol++;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              row.modules.vdomHoz.rightCol = this.rightCol;
+            }
+          });
+          if (this.rightCol >= this.columns.length - 1) {
+            this.vDomPadRight = 0;
+          } else {
+            this.vDomPadRight -= column.getWidth();
+          }
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    if (changes) {
+      this.tableElement.style.paddingRight = this.vDomPadRight + "px";
+    }
+  }
+  addColLeft() {
+    var changes = false, working = true;
+    while (working) {
+      let column = this.columns[this.leftCol - 1];
+      if (column) {
+        if (column.modules.vdomHoz.rightPos >= this.vDomScrollPosLeft) {
+          changes = true;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              var cell = row.getCell(column);
+              row.getElement().insertBefore(cell.getElement(), row.getCell(this.columns[this.leftCol]).getElement());
+              cell.cellRendered();
+            }
+          });
+          this.leftCol--;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              row.modules.vdomHoz.leftCol = this.leftCol;
+            }
+          });
+          if (this.leftCol <= 0) {
+            this.vDomPadLeft = 0;
+          } else {
+            this.vDomPadLeft -= column.getWidth();
+          }
+          let diff = this.fitDataColActualWidthCheck(column);
+          if (diff) {
+            this.scrollLeft = this.elementVertical.scrollLeft = this.elementVertical.scrollLeft + diff;
+            this.vDomPadRight -= diff;
+          }
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    if (changes) {
+      this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
+    }
+  }
+  removeColRight() {
+    var changes = false, working = true;
+    while (working) {
+      let column = this.columns[this.rightCol];
+      if (column) {
+        if (column.modules.vdomHoz.leftPos > this.vDomScrollPosRight) {
+          changes = true;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              var cell = row.getCell(column);
+              try {
+                row.getElement().removeChild(cell.getElement());
+              } catch (ex) {
+                console.warn("Could not removeColRight", ex.message);
+              }
+            }
+          });
+          this.vDomPadRight += column.getWidth();
+          this.rightCol--;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              row.modules.vdomHoz.rightCol = this.rightCol;
+            }
+          });
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    if (changes) {
+      this.tableElement.style.paddingRight = this.vDomPadRight + "px";
+    }
+  }
+  removeColLeft() {
+    var changes = false, working = true;
+    while (working) {
+      let column = this.columns[this.leftCol];
+      if (column) {
+        if (column.modules.vdomHoz.rightPos < this.vDomScrollPosLeft) {
+          changes = true;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              var cell = row.getCell(column);
+              try {
+                row.getElement().removeChild(cell.getElement());
+              } catch (ex) {
+                console.warn("Could not removeColLeft", ex.message);
+              }
+            }
+          });
+          this.vDomPadLeft += column.getWidth();
+          this.leftCol++;
+          this.getVisibleRows().forEach((row) => {
+            if (row.type !== "group") {
+              row.modules.vdomHoz.leftCol = this.leftCol;
+            }
+          });
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    if (changes) {
+      this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
+    }
+  }
+  fitDataColActualWidthCheck(column) {
+    var newWidth, widthDiff;
+    if (column.modules.vdomHoz.fitDataCheck) {
+      column.reinitializeWidth();
+      newWidth = column.getWidth();
+      widthDiff = newWidth - column.modules.vdomHoz.width;
+      if (widthDiff) {
+        column.modules.vdomHoz.rightPos += widthDiff;
+        column.modules.vdomHoz.width = newWidth;
+        this.colPositionAdjust(this.columns.indexOf(column) + 1, this.columns.length, widthDiff);
+      }
+      column.modules.vdomHoz.fitDataCheck = false;
+    }
+    return widthDiff;
+  }
+  initializeRow(row) {
+    if (row.type !== "group") {
+      row.modules.vdomHoz = {
+        leftCol: this.leftCol,
+        rightCol: this.rightCol
+      };
+      if (this.table.modules.frozenColumns) {
+        this.table.modules.frozenColumns.leftColumns.forEach((column) => {
+          this.appendCell(row, column);
+        });
+      }
+      for (let i = this.leftCol; i <= this.rightCol; i++) {
+        this.appendCell(row, this.columns[i]);
+      }
+      if (this.table.modules.frozenColumns) {
+        this.table.modules.frozenColumns.rightColumns.forEach((column) => {
+          this.appendCell(row, column);
+        });
+      }
+    }
+  }
+  appendCell(row, column) {
+    if (column && column.visible) {
+      let cell = row.getCell(column);
+      row.getElement().appendChild(cell.getElement());
+      cell.cellRendered();
+    }
+  }
+  reinitializeRow(row, force) {
+    if (row.type !== "group") {
+      if (force || !row.modules.vdomHoz || row.modules.vdomHoz.leftCol !== this.leftCol || row.modules.vdomHoz.rightCol !== this.rightCol) {
+        var rowEl = row.getElement();
+        while (rowEl.firstChild)
+          rowEl.removeChild(rowEl.firstChild);
+        this.initializeRow(row);
+      }
+    }
+  }
+}
+
+class ColumnManager extends CoreFeature {
+  constructor(table) {
+    super(table);
+    this.blockHozScrollEvent = false;
+    this.headersElement = null;
+    this.contentsElement = null;
+    this.element = null;
+    this.columns = [];
+    this.columnsByIndex = [];
+    this.columnsByField = {};
+    this.scrollLeft = 0;
+    this.optionsList = new OptionsList(this.table, "column definition", defaultColumnOptions);
+    this.redrawBlock = false;
+    this.redrawBlockUpdate = null;
+    this.renderer = null;
+  }
+  initialize() {
+    this.initializeRenderer();
+    this.headersElement = this.createHeadersElement();
+    this.contentsElement = this.createHeaderContentsElement();
+    this.element = this.createHeaderElement();
+    this.contentsElement.insertBefore(this.headersElement, this.contentsElement.firstChild);
+    this.element.insertBefore(this.contentsElement, this.element.firstChild);
+    this.subscribe("scroll-horizontal", this.scrollHorizontal.bind(this));
+    this.subscribe("scrollbar-vertical", this.padVerticalScrollbar.bind(this));
+  }
+  padVerticalScrollbar(width) {
+    if (this.table.rtl) {
+      this.headersElement.style.marginLeft = width + "px";
+    } else {
+      this.headersElement.style.marginRight = width + "px";
+    }
+  }
+  initializeRenderer() {
+    var renderClass;
+    var renderers = {
+      "virtual": VirtualDomHorizontal,
+      "basic": BasicHorizontal
+    };
+    if (typeof this.table.options.renderHorizontal === "string") {
+      renderClass = renderers[this.table.options.renderHorizontal];
+    } else {
+      renderClass = this.table.options.renderHorizontal;
+    }
+    if (renderClass) {
+      this.renderer = new renderClass(this.table, this.element, this.tableElement);
+      this.renderer.initialize();
+    } else {
+      console.error("Unable to find matching renderer:", this.table.options.renderHorizontal);
+    }
+  }
+  createHeadersElement() {
+    var el = document.createElement("div");
+    el.classList.add("tabulator-headers");
+    el.setAttribute("role", "row");
+    return el;
+  }
+  createHeaderContentsElement() {
+    var el = document.createElement("div");
+    el.classList.add("tabulator-header-contents");
+    el.setAttribute("role", "rowgroup");
+    return el;
+  }
+  createHeaderElement() {
+    var el = document.createElement("div");
+    el.classList.add("tabulator-header");
+    el.setAttribute("role", "rowgroup");
+    if (!this.table.options.headerVisible) {
+      el.classList.add("tabulator-header-hidden");
+    }
+    return el;
+  }
+  getElement() {
+    return this.element;
+  }
+  getContentsElement() {
+    return this.contentsElement;
+  }
+  getHeadersElement() {
+    return this.headersElement;
+  }
+  scrollHorizontal(left) {
+    this.contentsElement.scrollLeft = left;
+    this.scrollLeft = left;
+    this.renderer.scrollColumns(left);
+  }
+  generateColumnsFromRowData(data) {
+    var cols = [], definitions = this.table.options.autoColumnsDefinitions, row, sorter;
+    if (data && data.length) {
+      row = data[0];
+      for (var key in row) {
+        let col = {
+          field: key,
+          title: key
+        };
+        let value = row[key];
+        switch (typeof value) {
+          case "undefined":
+            sorter = "string";
+            break;
+          case "boolean":
+            sorter = "boolean";
+            break;
+          case "object":
+            if (Array.isArray(value)) {
+              sorter = "array";
+            } else {
+              sorter = "string";
+            }
+            break;
+          default:
+            if (!isNaN(value) && value !== "") {
+              sorter = "number";
+            } else {
+              if (value.match(/((^[0-9]+[a-z]+)|(^[a-z]+[0-9]+))+$/i)) {
+                sorter = "alphanum";
+              } else {
+                sorter = "string";
+              }
+            }
+            break;
+        }
+        col.sorter = sorter;
+        cols.push(col);
+      }
+      if (definitions) {
+        switch (typeof definitions) {
+          case "function":
+            this.table.options.columns = definitions.call(this.table, cols);
+            break;
+          case "object":
+            if (Array.isArray(definitions)) {
+              cols.forEach((col) => {
+                var match = definitions.find((def) => {
+                  return def.field === col.field;
+                });
+                if (match) {
+                  Object.assign(col, match);
+                }
+              });
+            } else {
+              cols.forEach((col) => {
+                if (definitions[col.field]) {
+                  Object.assign(col, definitions[col.field]);
+                }
+              });
+            }
+            this.table.options.columns = cols;
+            break;
+        }
+      } else {
+        this.table.options.columns = cols;
+      }
+      this.setColumns(this.table.options.columns);
+    }
+  }
+  setColumns(cols, row) {
+    while (this.headersElement.firstChild)
+      this.headersElement.removeChild(this.headersElement.firstChild);
+    this.columns = [];
+    this.columnsByIndex = [];
+    this.columnsByField = {};
+    this.dispatch("columns-loading");
+    cols.forEach((def, i) => {
+      this._addColumn(def);
+    });
+    this._reIndexColumns();
+    this.dispatch("columns-loaded");
+    this.rerenderColumns(false, true);
+    this.redraw(true);
+  }
+  _addColumn(definition, before, nextToColumn) {
+    var column = new Column(definition, this), colEl = column.getElement(), index = nextToColumn ? this.findColumnIndex(nextToColumn) : nextToColumn;
+    if (nextToColumn && index > -1) {
+      var topColumn = nextToColumn.getTopColumn();
+      var parentIndex = this.columns.indexOf(topColumn);
+      var nextEl = topColumn.getElement();
+      if (before) {
+        this.columns.splice(parentIndex, 0, column);
+        nextEl.parentNode.insertBefore(colEl, nextEl);
+      } else {
+        this.columns.splice(parentIndex + 1, 0, column);
+        nextEl.parentNode.insertBefore(colEl, nextEl.nextSibling);
+      }
+    } else {
+      if (before) {
+        this.columns.unshift(column);
+        this.headersElement.insertBefore(column.getElement(), this.headersElement.firstChild);
+      } else {
+        this.columns.push(column);
+        this.headersElement.appendChild(column.getElement());
+      }
+    }
+    column.columnRendered();
+    return column;
+  }
+  registerColumnField(col) {
+    if (col.definition.field) {
+      this.columnsByField[col.definition.field] = col;
+    }
+  }
+  registerColumnPosition(col) {
+    this.columnsByIndex.push(col);
+  }
+  _reIndexColumns() {
+    this.columnsByIndex = [];
+    this.columns.forEach(function(column) {
+      column.reRegisterPosition();
+    });
+  }
+  verticalAlignHeaders() {
+    var minHeight = 0;
+    if (!this.redrawBlock) {
+      this.headersElement.style.height = "";
+      this.columns.forEach((column) => {
+        column.clearVerticalAlign();
+      });
+      this.columns.forEach((column) => {
+        var height = column.getHeight();
+        if (height > minHeight) {
+          minHeight = height;
+        }
+      });
+      this.headersElement.style.height = minHeight + "px";
+      this.columns.forEach((column) => {
+        column.verticalAlign(this.table.options.columnHeaderVertAlign, minHeight);
+      });
+      this.table.rowManager.adjustTableSize();
+    }
+  }
+  findColumn(subject) {
+    var columns;
+    if (typeof subject == "object") {
+      if (subject instanceof Column) {
+        return subject;
+      } else if (subject instanceof ColumnComponent) {
+        return subject._getSelf() || false;
+      } else if (typeof HTMLElement !== "undefined" && subject instanceof HTMLElement) {
+        columns = [];
+        this.columns.forEach((column) => {
+          columns.push(column);
+          columns = columns.concat(column.getColumns(true));
+        });
+        let match = columns.find((column) => {
+          return column.element === subject;
+        });
+        return match || false;
+      }
+    } else {
+      return this.columnsByField[subject] || false;
+    }
+    return false;
+  }
+  getColumnByField(field) {
+    return this.columnsByField[field];
+  }
+  getColumnsByFieldRoot(root) {
+    var matches = [];
+    Object.keys(this.columnsByField).forEach((field) => {
+      var fieldRoot = field.split(".")[0];
+      if (fieldRoot === root) {
+        matches.push(this.columnsByField[field]);
+      }
+    });
+    return matches;
+  }
+  getColumnByIndex(index) {
+    return this.columnsByIndex[index];
+  }
+  getFirstVisibleColumn() {
+    var index = this.columnsByIndex.findIndex((col) => {
+      return col.visible;
+    });
+    return index > -1 ? this.columnsByIndex[index] : false;
+  }
+  getColumns() {
+    return this.columns;
+  }
+  findColumnIndex(column) {
+    return this.columnsByIndex.findIndex((col) => {
+      return column === col;
+    });
+  }
+  getRealColumns() {
+    return this.columnsByIndex;
+  }
+  traverse(callback) {
+    this.columnsByIndex.forEach((column, i) => {
+      callback(column, i);
+    });
+  }
+  getDefinitions(active) {
+    var output = [];
+    this.columnsByIndex.forEach((column) => {
+      if (!active || active && column.visible) {
+        output.push(column.getDefinition());
+      }
+    });
+    return output;
+  }
+  getDefinitionTree() {
+    var output = [];
+    this.columns.forEach((column) => {
+      output.push(column.getDefinition(true));
+    });
+    return output;
+  }
+  getComponents(structured) {
+    var output = [], columns = structured ? this.columns : this.columnsByIndex;
+    columns.forEach((column) => {
+      output.push(column.getComponent());
+    });
+    return output;
+  }
+  getWidth() {
+    var width = 0;
+    this.columnsByIndex.forEach((column) => {
+      if (column.visible) {
+        width += column.getWidth();
+      }
+    });
+    return width;
+  }
+  moveColumn(from, to, after) {
+    to.element.parentNode.insertBefore(from.element, to.element);
+    if (after) {
+      to.element.parentNode.insertBefore(to.element, from.element);
+    }
+    this.moveColumnActual(from, to, after);
+    this.verticalAlignHeaders();
+    this.table.rowManager.reinitialize();
+  }
+  moveColumnActual(from, to, after) {
+    if (from.parent.isGroup) {
+      this._moveColumnInArray(from.parent.columns, from, to, after);
+    } else {
+      this._moveColumnInArray(this.columns, from, to, after);
+    }
+    this._moveColumnInArray(this.columnsByIndex, from, to, after, true);
+    this.rerenderColumns(true);
+    this.dispatch("column-moved", from, to, after);
+    if (this.subscribedExternal("columnMoved")) {
+      this.dispatchExternal("columnMoved", from.getComponent(), this.table.columnManager.getComponents());
+    }
+  }
+  _moveColumnInArray(columns, from, to, after, updateRows) {
+    var fromIndex = columns.indexOf(from), toIndex, rows = [];
+    if (fromIndex > -1) {
+      columns.splice(fromIndex, 1);
+      toIndex = columns.indexOf(to);
+      if (toIndex > -1) {
+        if (after) {
+          toIndex = toIndex + 1;
+        }
+      } else {
+        toIndex = fromIndex;
+      }
+      columns.splice(toIndex, 0, from);
+      if (updateRows) {
+        rows = this.chain("column-moving-rows", [from, to, after], null, []) || [];
+        rows = rows.concat(this.table.rowManager.rows);
+        rows.forEach(function(row) {
+          if (row.cells.length) {
+            var cell = row.cells.splice(fromIndex, 1)[0];
+            row.cells.splice(toIndex, 0, cell);
+          }
+        });
+      }
+    }
+  }
+  scrollToColumn(column, position, ifVisible) {
+    var left = 0, offset = column.getLeftOffset(), adjust = 0, colEl = column.getElement();
+    return new Promise((resolve, reject) => {
+      if (typeof position === "undefined") {
+        position = this.table.options.scrollToColumnPosition;
+      }
+      if (typeof ifVisible === "undefined") {
+        ifVisible = this.table.options.scrollToColumnIfVisible;
+      }
+      if (column.visible) {
+        switch (position) {
+          case "middle":
+          case "center":
+            adjust = -this.element.clientWidth / 2;
+            break;
+          case "right":
+            adjust = colEl.clientWidth - this.headersElement.clientWidth;
+            break;
+        }
+        if (!ifVisible) {
+          if (offset > 0 && offset + colEl.offsetWidth < this.element.clientWidth) {
+            return false;
+          }
+        }
+        left = offset + adjust;
+        left = Math.max(Math.min(left, this.table.rowManager.element.scrollWidth - this.table.rowManager.element.clientWidth), 0);
+        this.table.rowManager.scrollHorizontal(left);
+        this.scrollHorizontal(left);
+        resolve();
+      } else {
+        console.warn("Scroll Error - Column not visible");
+        reject("Scroll Error - Column not visible");
+      }
+    });
+  }
+  generateCells(row) {
+    var cells = [];
+    this.columnsByIndex.forEach((column) => {
+      cells.push(column.generateCell(row));
+    });
+    return cells;
+  }
+  getFlexBaseWidth() {
+    var totalWidth = this.table.element.clientWidth, fixedWidth = 0;
+    if (this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight) {
+      totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
+    }
+    this.columnsByIndex.forEach(function(column) {
+      var width, minWidth, colWidth;
+      if (column.visible) {
+        width = column.definition.width || 0;
+        minWidth = parseInt(column.minWidth);
+        if (typeof width == "string") {
+          if (width.indexOf("%") > -1) {
+            colWidth = totalWidth / 100 * parseInt(width);
+          } else {
+            colWidth = parseInt(width);
+          }
+        } else {
+          colWidth = width;
+        }
+        fixedWidth += colWidth > minWidth ? colWidth : minWidth;
+      }
+    });
+    return fixedWidth;
+  }
+  addColumn(definition, before, nextToColumn) {
+    return new Promise((resolve, reject) => {
+      var column = this._addColumn(definition, before, nextToColumn);
+      this._reIndexColumns();
+      this.dispatch("column-add", definition, before, nextToColumn);
+      if (this.layoutMode() != "fitColumns") {
+        column.reinitializeWidth();
+      }
+      this.redraw(true);
+      this.table.rowManager.reinitialize();
+      this.rerenderColumns();
+      resolve(column);
+    });
+  }
+  deregisterColumn(column) {
+    var field = column.getField(), index;
+    if (field) {
+      delete this.columnsByField[field];
+    }
+    index = this.columnsByIndex.indexOf(column);
+    if (index > -1) {
+      this.columnsByIndex.splice(index, 1);
+    }
+    index = this.columns.indexOf(column);
+    if (index > -1) {
+      this.columns.splice(index, 1);
+    }
+    this.verticalAlignHeaders();
+    this.redraw();
+  }
+  rerenderColumns(update, silent) {
+    if (!this.redrawBlock) {
+      this.renderer.rerenderColumns(update, silent);
+    } else {
+      if (update === false || update === true && this.redrawBlockUpdate === null) {
+        this.redrawBlockUpdate = update;
+      }
+    }
+  }
+  blockRedraw() {
+    this.redrawBlock = true;
+    this.redrawBlockUpdate = null;
+  }
+  restoreRedraw() {
+    this.redrawBlock = false;
+    this.verticalAlignHeaders();
+    this.renderer.rerenderColumns(this.redrawBlockUpdate);
+  }
+  redraw(force) {
+    if (Helpers.elVisible(this.element)) {
+      this.verticalAlignHeaders();
+    }
+    if (force) {
+      this.table.rowManager.resetScroll();
+      this.table.rowManager.reinitialize();
+    }
+    if (!this.confirm("table-redrawing", force)) {
+      this.layoutRefresh(force);
+    }
+    this.dispatch("table-redraw", force);
+  }
+}
+
 class RowComponent {
   constructor(row) {
     this._row = row;
@@ -2298,486 +2750,2838 @@ class Row extends CoreFeature {
   }
 }
 
-var defaultCalculations = {
-  "avg": function(values, data, calcParams) {
-    var output = 0, precision = typeof calcParams.precision !== "undefined" ? calcParams.precision : 2;
-    if (values.length) {
-      output = values.reduce(function(sum, value) {
-        return Number(sum) + Number(value);
-      });
-      output = output / values.length;
-      output = precision !== false ? output.toFixed(precision) : output;
-    }
-    return parseFloat(output).toString();
-  },
-  "max": function(values, data, calcParams) {
-    var output = null, precision = typeof calcParams.precision !== "undefined" ? calcParams.precision : false;
-    values.forEach(function(value) {
-      value = Number(value);
-      if (value > output || output === null) {
-        output = value;
-      }
-    });
-    return output !== null ? precision !== false ? output.toFixed(precision) : output : "";
-  },
-  "min": function(values, data, calcParams) {
-    var output = null, precision = typeof calcParams.precision !== "undefined" ? calcParams.precision : false;
-    values.forEach(function(value) {
-      value = Number(value);
-      if (value < output || output === null) {
-        output = value;
-      }
-    });
-    return output !== null ? precision !== false ? output.toFixed(precision) : output : "";
-  },
-  "sum": function(values, data, calcParams) {
-    var output = 0, precision = typeof calcParams.precision !== "undefined" ? calcParams.precision : false;
-    if (values.length) {
-      values.forEach(function(value) {
-        value = Number(value);
-        output += !isNaN(value) ? Number(value) : 0;
-      });
-    }
-    return precision !== false ? output.toFixed(precision) : output;
-  },
-  "concat": function(values, data, calcParams) {
-    var output = 0;
-    if (values.length) {
-      output = values.reduce(function(sum, value) {
-        return String(sum) + String(value);
-      });
-    }
-    return output;
-  },
-  "count": function(values, data, calcParams) {
-    var output = 0;
-    if (values.length) {
-      values.forEach(function(value) {
-        if (value) {
-          output++;
-        }
-      });
-    }
-    return output;
-  }
-};
-
-class ColumnCalcs extends Module {
+class BasicVertical extends Renderer {
   constructor(table) {
     super(table);
-    this.topCalcs = [];
-    this.botCalcs = [];
-    this.genColumn = false;
-    this.topElement = this.createElement();
-    this.botElement = this.createElement();
-    this.topRow = false;
-    this.botRow = false;
-    this.topInitialized = false;
-    this.botInitialized = false;
-    this.blocked = false;
-    this.recalcAfterBlock = false;
-    this.registerTableOption("columnCalcs", true);
-    this.registerColumnOption("topCalc");
-    this.registerColumnOption("topCalcParams");
-    this.registerColumnOption("topCalcFormatter");
-    this.registerColumnOption("topCalcFormatterParams");
-    this.registerColumnOption("bottomCalc");
-    this.registerColumnOption("bottomCalcParams");
-    this.registerColumnOption("bottomCalcFormatter");
-    this.registerColumnOption("bottomCalcFormatterParams");
+    this.verticalFillMode = "fill";
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
   }
-  createElement() {
+  clearRows() {
+    var element = this.tableElement;
+    while (element.firstChild)
+      element.removeChild(element.firstChild);
+    element.scrollTop = 0;
+    element.scrollLeft = 0;
+    element.style.minWidth = "";
+    element.style.minHeight = "";
+    element.style.display = "";
+    element.style.visibility = "";
+  }
+  renderRows() {
+    var element = this.tableElement, onlyGroupHeaders = true;
+    this.rows().forEach((row, index) => {
+      this.styleRow(row, index);
+      element.appendChild(row.getElement());
+      row.initialize(true);
+      if (row.type !== "group") {
+        onlyGroupHeaders = false;
+      }
+    });
+    if (onlyGroupHeaders) {
+      element.style.minWidth = this.table.columnManager.getWidth() + "px";
+    } else {
+      element.style.minWidth = "";
+    }
+  }
+  rerenderRows(callback) {
+    this.clearRows();
+    this.renderRows();
+    if (callback) {
+      callback();
+    }
+  }
+  scrollToRowNearestTop(row) {
+    var rowTop = Helpers.elOffset(row.getElement()).top;
+    return !(Math.abs(this.elementVertical.scrollTop - rowTop) > Math.abs(this.elementVertical.scrollTop + this.elementVertical.clientHeight - rowTop));
+  }
+  scrollToRow(row) {
+    var rowEl = row.getElement();
+    this.elementVertical.scrollTop = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top + this.elementVertical.scrollTop;
+  }
+  visibleRows(includingBuffer) {
+    return this.rows();
+  }
+}
+
+class VirtualDomVertical extends Renderer {
+  constructor(table) {
+    super(table);
+    this.verticalFillMode = "fill";
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
+    this.vDomRowHeight = 20;
+    this.vDomTop = 0;
+    this.vDomBottom = 0;
+    this.vDomScrollPosTop = 0;
+    this.vDomScrollPosBottom = 0;
+    this.vDomTopPad = 0;
+    this.vDomBottomPad = 0;
+    this.vDomMaxRenderChain = 90;
+    this.vDomWindowBuffer = 0;
+    this.vDomWindowMinTotalRows = 20;
+    this.vDomWindowMinMarginRows = 5;
+    this.vDomTopNewRows = [];
+    this.vDomBottomNewRows = [];
+  }
+  clearRows() {
+    var element = this.tableElement;
+    while (element.firstChild)
+      element.removeChild(element.firstChild);
+    element.style.paddingTop = "";
+    element.style.paddingBottom = "";
+    element.style.minHeight = "";
+    element.style.display = "";
+    element.style.visibility = "";
+    this.elementVertical.scrollTop = 0;
+    this.elementVertical.scrollLeft = 0;
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
+    this.vDomTop = 0;
+    this.vDomBottom = 0;
+    this.vDomTopPad = 0;
+    this.vDomBottomPad = 0;
+    this.vDomScrollPosTop = 0;
+    this.vDomScrollPosBottom = 0;
+  }
+  renderRows() {
+    this._virtualRenderFill();
+  }
+  rerenderRows(callback) {
+    var scrollTop = this.elementVertical.scrollTop;
+    var topRow = false;
+    var topOffset = false;
+    var left = this.table.rowManager.scrollLeft;
+    var rows = this.rows();
+    for (var i = this.vDomTop; i <= this.vDomBottom; i++) {
+      if (rows[i]) {
+        var diff = scrollTop - rows[i].getElement().offsetTop;
+        if (topOffset === false || Math.abs(diff) < topOffset) {
+          topOffset = diff;
+          topRow = i;
+        } else {
+          break;
+        }
+      }
+    }
+    rows.forEach((row) => {
+      row.deinitializeHeight();
+    });
+    if (callback) {
+      callback();
+    }
+    if (this.rows().length) {
+      this._virtualRenderFill(topRow === false ? this.rows.length - 1 : topRow, true, topOffset || 0);
+    } else {
+      this.clear();
+      this.table.rowManager._showPlaceholder();
+    }
+    this.scrollColumns(left);
+  }
+  scrollColumns(left) {
+    this.table.rowManager.scrollHorizontal(left);
+  }
+  scrollRows(top, dir) {
+    var topDiff = top - this.vDomScrollPosTop;
+    var bottomDiff = top - this.vDomScrollPosBottom;
+    var margin = this.vDomWindowBuffer * 2;
+    var rows = this.rows();
+    this.scrollTop = top;
+    if (-topDiff > margin || bottomDiff > margin) {
+      var left = this.table.rowManager.scrollLeft;
+      this._virtualRenderFill(Math.floor(this.elementVertical.scrollTop / this.elementVertical.scrollHeight * rows.length));
+      this.scrollColumns(left);
+    } else {
+      if (dir) {
+        if (topDiff < 0) {
+          this._addTopRow(rows, -topDiff);
+        }
+        if (bottomDiff < 0) {
+          if (this.vDomScrollHeight - this.scrollTop > this.vDomWindowBuffer) {
+            this._removeBottomRow(rows, -bottomDiff);
+          } else {
+            this.vDomScrollPosBottom = this.scrollTop;
+          }
+        }
+      } else {
+        if (bottomDiff >= 0) {
+          this._addBottomRow(rows, bottomDiff);
+        }
+        if (topDiff >= 0) {
+          if (this.scrollTop > this.vDomWindowBuffer) {
+            this._removeTopRow(rows, topDiff);
+          } else {
+            this.vDomScrollPosTop = this.scrollTop;
+          }
+        }
+      }
+    }
+  }
+  resize() {
+    this.vDomWindowBuffer = this.table.options.renderVerticalBuffer || this.elementVertical.clientHeight;
+  }
+  scrollToRowNearestTop(row) {
+    var rowIndex = this.rows().indexOf(row);
+    return !(Math.abs(this.vDomTop - rowIndex) > Math.abs(this.vDomBottom - rowIndex));
+  }
+  scrollToRow(row) {
+    var index = this.rows().indexOf(row);
+    if (index > -1) {
+      this._virtualRenderFill(index, true);
+    }
+  }
+  visibleRows(includingBuffer) {
+    var topEdge = this.elementVertical.scrollTop, bottomEdge = this.elementVertical.clientHeight + topEdge, topFound = false, topRow = 0, bottomRow = 0, rows = this.rows();
+    if (includingBuffer) {
+      topRow = this.vDomTop;
+      bottomRow = this.vDomBottom;
+    } else {
+      for (var i = this.vDomTop; i <= this.vDomBottom; i++) {
+        if (rows[i]) {
+          if (!topFound) {
+            if (topEdge - rows[i].getElement().offsetTop >= 0) {
+              topRow = i;
+            } else {
+              topFound = true;
+              if (bottomEdge - rows[i].getElement().offsetTop >= 0) {
+                bottomRow = i;
+              } else {
+                break;
+              }
+            }
+          } else {
+            if (bottomEdge - rows[i].getElement().offsetTop >= 0) {
+              bottomRow = i;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+    }
+    return rows.slice(topRow, bottomRow + 1);
+  }
+  _virtualRenderFill(position, forceMove, offset) {
+    var element = this.tableElement, holder = this.elementVertical, topPad = 0, rowsHeight = 0, heightOccupied = 0, topPadHeight = 0, i = 0, rows = this.rows(), rowsCount = rows.length, containerHeight = this.elementVertical.clientHeight;
+    position = position || 0;
+    offset = offset || 0;
+    if (!position) {
+      this.clear();
+    } else {
+      while (element.firstChild)
+        element.removeChild(element.firstChild);
+      heightOccupied = (rowsCount - position + 1) * this.vDomRowHeight;
+      if (heightOccupied < containerHeight) {
+        position -= Math.ceil((containerHeight - heightOccupied) / this.vDomRowHeight);
+        if (position < 0) {
+          position = 0;
+        }
+      }
+      topPad = Math.min(Math.max(Math.floor(this.vDomWindowBuffer / this.vDomRowHeight), this.vDomWindowMinMarginRows), position);
+      position -= topPad;
+    }
+    if (rowsCount && Helpers.elVisible(this.elementVertical)) {
+      this.vDomTop = position;
+      this.vDomBottom = position - 1;
+      while ((rowsHeight <= containerHeight + this.vDomWindowBuffer || i < this.vDomWindowMinTotalRows) && this.vDomBottom < rowsCount - 1) {
+        var index = this.vDomBottom + 1, row = rows[index], rowHeight = 0;
+        this.styleRow(row, index);
+        element.appendChild(row.getElement());
+        row.initialize();
+        if (!row.heightInitialized) {
+          row.normalizeHeight(true);
+        }
+        rowHeight = row.getHeight();
+        if (i < topPad) {
+          topPadHeight += rowHeight;
+        } else {
+          rowsHeight += rowHeight;
+        }
+        if (rowHeight > this.vDomWindowBuffer) {
+          this.vDomWindowBuffer = rowHeight * 2;
+        }
+        this.vDomBottom++;
+        i++;
+      }
+      if (!position) {
+        this.vDomTopPad = 0;
+        this.vDomRowHeight = Math.floor((rowsHeight + topPadHeight) / i);
+        this.vDomBottomPad = this.vDomRowHeight * (rowsCount - this.vDomBottom - 1);
+        this.vDomScrollHeight = topPadHeight + rowsHeight + this.vDomBottomPad - containerHeight;
+      } else {
+        this.vDomTopPad = !forceMove ? this.scrollTop - topPadHeight : this.vDomRowHeight * this.vDomTop + offset;
+        this.vDomBottomPad = this.vDomBottom == rowsCount - 1 ? 0 : Math.max(this.vDomScrollHeight - this.vDomTopPad - rowsHeight - topPadHeight, 0);
+      }
+      element.style.paddingTop = this.vDomTopPad + "px";
+      element.style.paddingBottom = this.vDomBottomPad + "px";
+      if (forceMove) {
+        this.scrollTop = this.vDomTopPad + topPadHeight + offset - (this.elementVertical.scrollWidth > this.elementVertical.clientWidth ? this.elementVertical.offsetHeight - containerHeight : 0);
+      }
+      this.scrollTop = Math.min(this.scrollTop, this.elementVertical.scrollHeight - containerHeight);
+      if (this.elementVertical.scrollWidth > this.elementVertical.offsetWidth && forceMove) {
+        this.scrollTop += this.elementVertical.offsetHeight - containerHeight;
+      }
+      this.vDomScrollPosTop = this.scrollTop;
+      this.vDomScrollPosBottom = this.scrollTop;
+      holder.scrollTop = this.scrollTop;
+      this.dispatch("render-virtual-fill");
+    }
+  }
+  _addTopRow(rows, fillableSpace) {
+    var table = this.tableElement, addedRows = [], paddingAdjust = 0, index = this.vDomTop - 1, i = 0, working = true;
+    while (working) {
+      if (this.vDomTop) {
+        let row = rows[index], rowHeight, initialized;
+        if (row && i < this.vDomMaxRenderChain) {
+          rowHeight = row.getHeight() || this.vDomRowHeight;
+          initialized = row.initialized;
+          if (fillableSpace >= rowHeight) {
+            this.styleRow(row, index);
+            table.insertBefore(row.getElement(), table.firstChild);
+            if (!row.initialized || !row.heightInitialized) {
+              addedRows.push(row);
+            }
+            row.initialize();
+            if (!initialized) {
+              rowHeight = row.getElement().offsetHeight;
+              if (rowHeight > this.vDomWindowBuffer) {
+                this.vDomWindowBuffer = rowHeight * 2;
+              }
+            }
+            fillableSpace -= rowHeight;
+            paddingAdjust += rowHeight;
+            this.vDomTop--;
+            index--;
+            i++;
+          } else {
+            working = false;
+          }
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    for (let row of addedRows) {
+      row.clearCellHeight();
+    }
+    this._quickNormalizeRowHeight(addedRows);
+    if (paddingAdjust) {
+      this.vDomTopPad -= paddingAdjust;
+      if (this.vDomTopPad < 0) {
+        this.vDomTopPad = index * this.vDomRowHeight;
+      }
+      if (index < 1) {
+        this.vDomTopPad = 0;
+      }
+      table.style.paddingTop = this.vDomTopPad + "px";
+      this.vDomScrollPosTop -= paddingAdjust;
+    }
+  }
+  _removeTopRow(rows, fillableSpace) {
+    var removableRows = [], paddingAdjust = 0, i = 0, working = true;
+    while (working) {
+      let row = rows[this.vDomTop], rowHeight;
+      if (row && i < this.vDomMaxRenderChain) {
+        rowHeight = row.getHeight() || this.vDomRowHeight;
+        if (fillableSpace >= rowHeight) {
+          this.vDomTop++;
+          fillableSpace -= rowHeight;
+          paddingAdjust += rowHeight;
+          removableRows.push(row);
+          i++;
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    for (let row of removableRows) {
+      let rowEl = row.getElement();
+      if (rowEl.parentNode) {
+        rowEl.parentNode.removeChild(rowEl);
+      }
+    }
+    if (paddingAdjust) {
+      this.vDomTopPad += paddingAdjust;
+      this.tableElement.style.paddingTop = this.vDomTopPad + "px";
+      this.vDomScrollPosTop += this.vDomTop ? paddingAdjust : paddingAdjust + this.vDomWindowBuffer;
+    }
+  }
+  _addBottomRow(rows, fillableSpace) {
+    var table = this.tableElement, addedRows = [], paddingAdjust = 0, index = this.vDomBottom + 1, i = 0, working = true;
+    while (working) {
+      let row = rows[index], rowHeight, initialized;
+      if (row && i < this.vDomMaxRenderChain) {
+        rowHeight = row.getHeight() || this.vDomRowHeight;
+        initialized = row.initialized;
+        if (fillableSpace >= rowHeight) {
+          this.styleRow(row, index);
+          table.appendChild(row.getElement());
+          if (!row.initialized || !row.heightInitialized) {
+            addedRows.push(row);
+          }
+          row.initialize();
+          if (!initialized) {
+            rowHeight = row.getElement().offsetHeight;
+            if (rowHeight > this.vDomWindowBuffer) {
+              this.vDomWindowBuffer = rowHeight * 2;
+            }
+          }
+          fillableSpace -= rowHeight;
+          paddingAdjust += rowHeight;
+          this.vDomBottom++;
+          index++;
+          i++;
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    for (let row of addedRows) {
+      row.clearCellHeight();
+    }
+    this._quickNormalizeRowHeight(addedRows);
+    if (paddingAdjust) {
+      this.vDomBottomPad -= paddingAdjust;
+      if (this.vDomBottomPad < 0 || index == rows.length - 1) {
+        this.vDomBottomPad = 0;
+      }
+      table.style.paddingBottom = this.vDomBottomPad + "px";
+      this.vDomScrollPosBottom += paddingAdjust;
+    }
+  }
+  _removeBottomRow(rows, fillableSpace) {
+    var removableRows = [], paddingAdjust = 0, i = 0, working = true;
+    while (working) {
+      let row = rows[this.vDomBottom], rowHeight;
+      if (row && i < this.vDomMaxRenderChain) {
+        rowHeight = row.getHeight() || this.vDomRowHeight;
+        if (fillableSpace >= rowHeight) {
+          this.vDomBottom--;
+          fillableSpace -= rowHeight;
+          paddingAdjust += rowHeight;
+          removableRows.push(row);
+          i++;
+        } else {
+          working = false;
+        }
+      } else {
+        working = false;
+      }
+    }
+    for (let row of removableRows) {
+      let rowEl = row.getElement();
+      if (rowEl.parentNode) {
+        rowEl.parentNode.removeChild(rowEl);
+      }
+    }
+    if (paddingAdjust) {
+      this.vDomBottomPad += paddingAdjust;
+      if (this.vDomBottomPad < 0) {
+        this.vDomBottomPad = 0;
+      }
+      this.tableElement.style.paddingBottom = this.vDomBottomPad + "px";
+      this.vDomScrollPosBottom -= paddingAdjust;
+    }
+  }
+  _quickNormalizeRowHeight(rows) {
+    for (let row of rows) {
+      row.calcHeight();
+    }
+    for (let row of rows) {
+      row.setCellHeight();
+    }
+  }
+}
+
+class RowManager extends CoreFeature {
+  constructor(table) {
+    super(table);
+    this.element = this.createHolderElement();
+    this.tableElement = this.createTableElement();
+    this.heightFixer = this.createTableElement();
+    this.placeholder = null;
+    this.placeholderContents = null;
+    this.firstRender = false;
+    this.renderMode = "virtual";
+    this.fixedHeight = false;
+    this.rows = [];
+    this.activeRowsPipeline = [];
+    this.activeRows = [];
+    this.activeRowsCount = 0;
+    this.displayRows = [];
+    this.displayRowsCount = 0;
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
+    this.redrawBlock = false;
+    this.redrawBlockRestoreConfig = false;
+    this.redrawBlockRenderInPosition = false;
+    this.dataPipeline = [];
+    this.displayPipeline = [];
+    this.scrollbarWidth = 0;
+    this.renderer = null;
+  }
+  createHolderElement() {
     var el = document.createElement("div");
-    el.classList.add("tabulator-calcs-holder");
+    el.classList.add("tabulator-tableholder");
+    el.setAttribute("tabindex", 0);
     return el;
   }
+  createTableElement() {
+    var el = document.createElement("div");
+    el.classList.add("tabulator-table");
+    el.setAttribute("role", "rowgroup");
+    return el;
+  }
+  initializePlaceholder() {
+    if (typeof this.table.options.placeholder == "string") {
+      let el = document.createElement("div");
+      el.classList.add("tabulator-placeholder");
+      let contents = document.createElement("div");
+      contents.classList.add("tabulator-placeholder-contents");
+      contents.innerHTML = this.table.options.placeholder;
+      el.appendChild(contents);
+      this.placeholderContents = contents;
+      this.placeholder = el;
+    }
+  }
+  getElement() {
+    return this.element;
+  }
+  getTableElement() {
+    return this.tableElement;
+  }
   initialize() {
-    this.genColumn = new Column({ field: "value" }, this);
-    this.subscribe("cell-value-changed", this.cellValueChanged.bind(this));
-    this.subscribe("column-init", this.initializeColumnCheck.bind(this));
-    this.subscribe("row-deleted", this.rowsUpdated.bind(this));
-    this.subscribe("scroll-horizontal", this.scrollHorizontal.bind(this));
-    this.subscribe("row-added", this.rowsUpdated.bind(this));
-    this.subscribe("column-moved", this.recalcActiveRows.bind(this));
-    this.subscribe("column-add", this.recalcActiveRows.bind(this));
-    this.subscribe("data-refreshed", this.recalcActiveRowsRefresh.bind(this));
-    this.subscribe("table-redraw", this.tableRedraw.bind(this));
-    this.subscribe("rows-visible", this.visibleRows.bind(this));
-    this.subscribe("scrollbar-vertical", this.adjustForScrollbar.bind(this));
-    this.subscribe("redraw-blocked", this.blockRedraw.bind(this));
-    this.subscribe("redraw-restored", this.restoreRedraw.bind(this));
-    this.registerTableFunction("getCalcResults", this.getResults.bind(this));
-    this.registerTableFunction("recalc", this.userRecalc.bind(this));
+    this.initializePlaceholder();
+    this.initializeRenderer();
+    this.element.appendChild(this.tableElement);
+    this.firstRender = true;
+    this.element.addEventListener("scroll", () => {
+      var left = this.element.scrollLeft, leftDir = this.scrollLeft > left, top = this.element.scrollTop, topDir = this.scrollTop > top;
+      if (this.scrollLeft != left) {
+        this.scrollLeft = left;
+        this.dispatch("scroll-horizontal", left, leftDir);
+        this.dispatchExternal("scrollHorizontal", left, leftDir);
+        this._positionPlaceholder();
+      }
+      if (this.scrollTop != top) {
+        this.scrollTop = top;
+        this.renderer.scrollRows(top, topDir);
+        this.dispatch("scroll-vertical", top, topDir);
+        this.dispatchExternal("scrollVertical", top, topDir);
+      }
+    });
   }
-  tableRedraw(force) {
-    this.recalc(this.table.rowManager.activeRows);
-    if (force) {
-      this.redraw();
+  findRow(subject) {
+    if (typeof subject == "object") {
+      if (subject instanceof Row) {
+        return subject;
+      } else if (subject instanceof RowComponent) {
+        return subject._getSelf() || false;
+      } else if (typeof HTMLElement !== "undefined" && subject instanceof HTMLElement) {
+        let match = this.rows.find((row) => {
+          return row.getElement() === subject;
+        });
+        return match || false;
+      } else if (subject === null) {
+        return false;
+      }
+    } else if (typeof subject == "undefined") {
+      return false;
+    } else {
+      let match = this.rows.find((row) => {
+        return row.data[this.table.options.index] == subject;
+      });
+      return match || false;
+    }
+    return false;
+  }
+  getRowFromDataObject(data) {
+    var match = this.rows.find((row) => {
+      return row.data === data;
+    });
+    return match || false;
+  }
+  getRowFromPosition(position) {
+    return this.getDisplayRows().find((row) => {
+      return row.getPosition() === position && row.isDisplayed();
+    });
+  }
+  scrollToRow(row, position, ifVisible) {
+    return this.renderer.scrollToRowPosition(row, position, ifVisible);
+  }
+  setData(data, renderInPosition, columnsChanged) {
+    return new Promise((resolve, reject) => {
+      if (renderInPosition && this.getDisplayRows().length) {
+        if (this.table.options.pagination) {
+          this._setDataActual(data, true);
+        } else {
+          this.reRenderInPosition(() => {
+            this._setDataActual(data);
+          });
+        }
+      } else {
+        if (this.table.options.autoColumns && columnsChanged && this.table.initialized) {
+          this.table.columnManager.generateColumnsFromRowData(data);
+        }
+        this.resetScroll();
+        this._setDataActual(data);
+      }
+      resolve();
+    });
+  }
+  _setDataActual(data, renderInPosition) {
+    this.dispatchExternal("dataProcessing", data);
+    this._wipeElements();
+    if (Array.isArray(data)) {
+      this.dispatch("data-processing", data);
+      data.forEach((def, i) => {
+        if (def && typeof def === "object") {
+          var row = new Row(def, this);
+          this.rows.push(row);
+        } else {
+          console.warn("Data Loading Warning - Invalid row data detected and ignored, expecting object but received:", def);
+        }
+      });
+      this.refreshActiveData(false, false, renderInPosition);
+      this.dispatch("data-processed", data);
+      this.dispatchExternal("dataProcessed", data);
+    } else {
+      console.error("Data Loading Error - Unable to process data due to invalid data type \nExpecting: array \nReceived: ", typeof data, "\nData:     ", data);
     }
   }
-  blockRedraw() {
-    this.blocked = true;
-    this.recalcAfterBlock = false;
+  _wipeElements() {
+    this.dispatch("rows-wipe");
+    this.rows.forEach((row) => {
+      row.wipe();
+    });
+    this.rows = [];
+    this.activeRows = [];
+    this.activeRowsPipeline = [];
+    this.activeRowsCount = 0;
+    this.displayRows = [];
+    this.displayRowsCount = 0;
+    this.adjustTableSize();
   }
-  restoreRedraw() {
-    this.blocked = false;
-    if (this.recalcAfterBlock) {
-      this.recalcAfterBlock = false;
-      this.recalcActiveRowsRefresh();
+  deleteRow(row, blockRedraw) {
+    var allIndex = this.rows.indexOf(row), activeIndex = this.activeRows.indexOf(row);
+    if (activeIndex > -1) {
+      this.activeRows.splice(activeIndex, 1);
+    }
+    if (allIndex > -1) {
+      this.rows.splice(allIndex, 1);
+    }
+    this.setActiveRows(this.activeRows);
+    this.displayRowIterator((rows) => {
+      var displayIndex = rows.indexOf(row);
+      if (displayIndex > -1) {
+        rows.splice(displayIndex, 1);
+      }
+    });
+    if (!blockRedraw) {
+      this.reRenderInPosition();
+    }
+    this.regenerateRowPositions();
+    this.dispatchExternal("rowDeleted", row.getComponent());
+    if (!this.displayRowsCount) {
+      this._showPlaceholder();
+    }
+    if (this.subscribedExternal("dataChanged")) {
+      this.dispatchExternal("dataChanged", this.getData());
     }
   }
-  userRecalc() {
-    this.recalc(this.table.rowManager.activeRows);
+  addRow(data, pos, index, blockRedraw) {
+    var row = this.addRowActual(data, pos, index, blockRedraw);
+    return row;
   }
-  blockCheck() {
-    if (this.blocked) {
-      this.recalcAfterBlock = true;
-    }
-    return this.blocked;
+  addRows(data, pos, index) {
+    var rows = [];
+    return new Promise((resolve, reject) => {
+      pos = this.findAddRowPos(pos);
+      if (!Array.isArray(data)) {
+        data = [data];
+      }
+      if (typeof index == "undefined" && pos || typeof index !== "undefined" && !pos) {
+        data.reverse();
+      }
+      data.forEach((item, i) => {
+        var row = this.addRow(item, pos, index, true);
+        rows.push(row);
+        this.dispatch("row-added", row, data, pos, index);
+      });
+      this.refreshActiveData(false, false, true);
+      this.regenerateRowPositions();
+      if (rows.length) {
+        this._clearPlaceholder();
+      }
+      resolve(rows);
+    });
   }
-  visibleRows(viewable, rows) {
-    if (this.topRow) {
-      rows.unshift(this.topRow);
+  findAddRowPos(pos) {
+    if (typeof pos === "undefined") {
+      pos = this.table.options.addRowPos;
     }
-    if (this.botRow) {
-      rows.push(this.botRow);
+    if (pos === "pos") {
+      pos = true;
+    }
+    if (pos === "bottom") {
+      pos = false;
+    }
+    return pos;
+  }
+  addRowActual(data, pos, index, blockRedraw) {
+    var row = data instanceof Row ? data : new Row(data || {}, this), top = this.findAddRowPos(pos), allIndex = -1, activeIndex, chainResult;
+    if (!index) {
+      chainResult = this.chain("row-adding-position", [row, top], null, { index, top });
+      index = chainResult.index;
+      top = chainResult.top;
+    }
+    if (typeof index !== "undefined") {
+      index = this.findRow(index);
+    }
+    index = this.chain("row-adding-index", [row, index, top], null, index);
+    if (index) {
+      allIndex = this.rows.indexOf(index);
+    }
+    if (index && allIndex > -1) {
+      activeIndex = this.activeRows.indexOf(index);
+      this.displayRowIterator(function(rows) {
+        var displayIndex = rows.indexOf(index);
+        if (displayIndex > -1) {
+          rows.splice(top ? displayIndex : displayIndex + 1, 0, row);
+        }
+      });
+      if (activeIndex > -1) {
+        this.activeRows.splice(top ? activeIndex : activeIndex + 1, 0, row);
+      }
+      this.rows.splice(top ? allIndex : allIndex + 1, 0, row);
+    } else {
+      if (top) {
+        this.displayRowIterator(function(rows) {
+          rows.unshift(row);
+        });
+        this.activeRows.unshift(row);
+        this.rows.unshift(row);
+      } else {
+        this.displayRowIterator(function(rows) {
+          rows.push(row);
+        });
+        this.activeRows.push(row);
+        this.rows.push(row);
+      }
+    }
+    this.setActiveRows(this.activeRows);
+    this.dispatchExternal("rowAdded", row.getComponent());
+    if (this.subscribedExternal("dataChanged")) {
+      this.dispatchExternal("dataChanged", this.table.rowManager.getData());
+    }
+    if (!blockRedraw) {
+      this.reRenderInPosition();
+    }
+    return row;
+  }
+  moveRow(from, to, after) {
+    this.dispatch("row-move", from, to, after);
+    this.moveRowActual(from, to, after);
+    this.regenerateRowPositions();
+    this.dispatch("row-moved", from, to, after);
+    this.dispatchExternal("rowMoved", from.getComponent());
+  }
+  moveRowActual(from, to, after) {
+    this.moveRowInArray(this.rows, from, to, after);
+    this.moveRowInArray(this.activeRows, from, to, after);
+    this.displayRowIterator((rows) => {
+      this.moveRowInArray(rows, from, to, after);
+    });
+    this.dispatch("row-moving", from, to, after);
+  }
+  moveRowInArray(rows, from, to, after) {
+    var fromIndex, toIndex, start, end;
+    if (from !== to) {
+      fromIndex = rows.indexOf(from);
+      if (fromIndex > -1) {
+        rows.splice(fromIndex, 1);
+        toIndex = rows.indexOf(to);
+        if (toIndex > -1) {
+          if (after) {
+            rows.splice(toIndex + 1, 0, from);
+          } else {
+            rows.splice(toIndex, 0, from);
+          }
+        } else {
+          rows.splice(fromIndex, 0, from);
+        }
+      }
+      if (rows === this.getDisplayRows()) {
+        start = fromIndex < toIndex ? fromIndex : toIndex;
+        end = toIndex > fromIndex ? toIndex : fromIndex + 1;
+        for (let i = start; i <= end; i++) {
+          if (rows[i]) {
+            this.styleRow(rows[i], i);
+          }
+        }
+      }
+    }
+  }
+  clearData() {
+    this.setData([]);
+  }
+  getRowIndex(row) {
+    return this.findRowIndex(row, this.rows);
+  }
+  getDisplayRowIndex(row) {
+    var index = this.getDisplayRows().indexOf(row);
+    return index > -1 ? index : false;
+  }
+  nextDisplayRow(row, rowOnly) {
+    var index = this.getDisplayRowIndex(row), nextRow = false;
+    if (index !== false && index < this.displayRowsCount - 1) {
+      nextRow = this.getDisplayRows()[index + 1];
+    }
+    if (nextRow && (!(nextRow instanceof Row) || nextRow.type != "row")) {
+      return this.nextDisplayRow(nextRow, rowOnly);
+    }
+    return nextRow;
+  }
+  prevDisplayRow(row, rowOnly) {
+    var index = this.getDisplayRowIndex(row), prevRow = false;
+    if (index) {
+      prevRow = this.getDisplayRows()[index - 1];
+    }
+    if (rowOnly && prevRow && (!(prevRow instanceof Row) || prevRow.type != "row")) {
+      return this.prevDisplayRow(prevRow, rowOnly);
+    }
+    return prevRow;
+  }
+  findRowIndex(row, list) {
+    var rowIndex;
+    row = this.findRow(row);
+    if (row) {
+      rowIndex = list.indexOf(row);
+      if (rowIndex > -1) {
+        return rowIndex;
+      }
+    }
+    return false;
+  }
+  getData(active, transform) {
+    var output = [], rows = this.getRows(active);
+    rows.forEach(function(row) {
+      if (row.type == "row") {
+        output.push(row.getData(transform || "data"));
+      }
+    });
+    return output;
+  }
+  getComponents(active) {
+    var output = [], rows = this.getRows(active);
+    rows.forEach(function(row) {
+      output.push(row.getComponent());
+    });
+    return output;
+  }
+  getDataCount(active) {
+    var rows = this.getRows(active);
+    return rows.length;
+  }
+  scrollHorizontal(left) {
+    this.scrollLeft = left;
+    this.element.scrollLeft = left;
+    this.dispatch("scroll-horizontal", left);
+  }
+  registerDataPipelineHandler(handler, priority) {
+    if (typeof priority !== "undefined") {
+      this.dataPipeline.push({ handler, priority });
+      this.dataPipeline.sort((a, b) => {
+        return a.priority - b.priority;
+      });
+    } else {
+      console.error("Data pipeline handlers must have a priority in order to be registered");
+    }
+  }
+  registerDisplayPipelineHandler(handler, priority) {
+    if (typeof priority !== "undefined") {
+      this.displayPipeline.push({ handler, priority });
+      this.displayPipeline.sort((a, b) => {
+        return a.priority - b.priority;
+      });
+    } else {
+      console.error("Display pipeline handlers must have a priority in order to be registered");
+    }
+  }
+  refreshActiveData(handler, skipStage, renderInPosition) {
+    var table = this.table, stage = "", index = 0, cascadeOrder = ["all", "dataPipeline", "display", "displayPipeline", "end"];
+    if (!this.table.destroyed) {
+      if (typeof handler === "function") {
+        index = this.dataPipeline.findIndex((item) => {
+          return item.handler === handler;
+        });
+        if (index > -1) {
+          stage = "dataPipeline";
+          if (skipStage) {
+            if (index == this.dataPipeline.length - 1) {
+              stage = "display";
+            } else {
+              index++;
+            }
+          }
+        } else {
+          index = this.displayPipeline.findIndex((item) => {
+            return item.handler === handler;
+          });
+          if (index > -1) {
+            stage = "displayPipeline";
+            if (skipStage) {
+              if (index == this.displayPipeline.length - 1) {
+                stage = "end";
+              } else {
+                index++;
+              }
+            }
+          } else {
+            console.error("Unable to refresh data, invalid handler provided", handler);
+            return;
+          }
+        }
+      } else {
+        stage = handler || "all";
+        index = 0;
+      }
+      if (this.redrawBlock) {
+        if (!this.redrawBlockRestoreConfig || this.redrawBlockRestoreConfig && (this.redrawBlockRestoreConfig.stage === stage && index < this.redrawBlockRestoreConfig.index || cascadeOrder.indexOf(stage) < cascadeOrder.indexOf(this.redrawBlockRestoreConfig.stage))) {
+          this.redrawBlockRestoreConfig = {
+            handler,
+            skipStage,
+            renderInPosition,
+            stage,
+            index
+          };
+        }
+        return;
+      } else {
+        if (Helpers.elVisible(this.element)) {
+          if (renderInPosition) {
+            this.reRenderInPosition(this.refreshPipelines.bind(this, handler, stage, index, renderInPosition));
+          } else {
+            this.refreshPipelines(handler, stage, index, renderInPosition);
+            if (!handler) {
+              this.table.columnManager.renderer.renderColumns();
+            }
+            this.renderTable();
+            if (table.options.layoutColumnsOnNewData) {
+              this.table.columnManager.redraw(true);
+            }
+          }
+        } else {
+          this.refreshPipelines(handler, stage, index, renderInPosition);
+        }
+        this.dispatch("data-refreshed");
+      }
+    }
+  }
+  refreshPipelines(handler, stage, index, renderInPosition) {
+    this.dispatch("data-refreshing");
+    if (!handler) {
+      this.activeRowsPipeline[0] = this.rows.slice(0);
+    }
+    switch (stage) {
+      case "all":
+      case "dataPipeline":
+        for (let i = index; i < this.dataPipeline.length; i++) {
+          let result = this.dataPipeline[i].handler(this.activeRowsPipeline[i].slice(0));
+          this.activeRowsPipeline[i + 1] = result || this.activeRowsPipeline[i].slice(0);
+        }
+        this.setActiveRows(this.activeRowsPipeline[this.dataPipeline.length]);
+      case "display":
+        index = 0;
+        this.resetDisplayRows();
+      case "displayPipeline":
+        for (let i = index; i < this.displayPipeline.length; i++) {
+          let result = this.displayPipeline[i].handler((i ? this.getDisplayRows(i - 1) : this.activeRows).slice(0), renderInPosition);
+          this.setDisplayRows(result || this.getDisplayRows(i - 1).slice(0), i);
+        }
+      case "end":
+        this.regenerateRowPositions();
+    }
+    if (this.getDisplayRows().length) {
+      this._clearPlaceholder();
+    }
+  }
+  regenerateRowPositions() {
+    var rows = this.getDisplayRows();
+    var index = 1;
+    rows.forEach((row) => {
+      if (row.type === "row") {
+        row.setPosition(index);
+        index++;
+      }
+    });
+  }
+  setActiveRows(activeRows) {
+    this.activeRows = activeRows;
+    this.activeRowsCount = this.activeRows.length;
+  }
+  resetDisplayRows() {
+    this.displayRows = [];
+    this.displayRows.push(this.activeRows.slice(0));
+    this.displayRowsCount = this.displayRows[0].length;
+  }
+  setDisplayRows(displayRows, index) {
+    this.displayRows[index] = displayRows;
+    if (index == this.displayRows.length - 1) {
+      this.displayRowsCount = this.displayRows[this.displayRows.length - 1].length;
+    }
+  }
+  getDisplayRows(index) {
+    if (typeof index == "undefined") {
+      return this.displayRows.length ? this.displayRows[this.displayRows.length - 1] : [];
+    } else {
+      return this.displayRows[index] || [];
+    }
+  }
+  getVisibleRows(chain, viewable) {
+    var rows = Object.assign([], this.renderer.visibleRows(!viewable));
+    if (chain) {
+      rows = this.chain("rows-visible", [viewable], rows, rows);
     }
     return rows;
   }
-  rowsUpdated(row) {
-    if (this.table.options.groupBy) {
-      this.recalcRowGroup(row);
+  displayRowIterator(callback) {
+    this.activeRowsPipeline.forEach(callback);
+    this.displayRows.forEach(callback);
+    this.displayRowsCount = this.displayRows[this.displayRows.length - 1].length;
+  }
+  getRows(type) {
+    var rows = [];
+    if (!type || type === true) {
+      rows = this.chain("rows-retrieve", type, null, this.rows) || this.rows;
     } else {
-      this.recalcActiveRows();
+      switch (type) {
+        case "active":
+          rows = this.activeRows;
+          break;
+        case "display":
+          rows = this.table.rowManager.getDisplayRows();
+          break;
+        case "visible":
+          rows = this.getVisibleRows(false, true);
+          break;
+      }
     }
+    return rows;
   }
-  recalcActiveRowsRefresh() {
-    if (this.table.options.groupBy && this.table.options.dataTreeStartExpanded && this.table.options.dataTree) {
-      this.recalcAll();
-    } else {
-      this.recalcActiveRows();
-    }
-  }
-  recalcActiveRows() {
-    this.recalc(this.table.rowManager.activeRows);
-  }
-  cellValueChanged(cell) {
-    if (cell.column.definition.topCalc || cell.column.definition.bottomCalc) {
-      if (this.table.options.groupBy) {
-        if (this.table.options.columnCalcs == "table" || this.table.options.columnCalcs == "both") {
-          this.recalcActiveRows();
-        }
-        if (this.table.options.columnCalcs != "table") {
-          this.recalcRowGroup(cell.row);
-        }
+  reRenderInPosition(callback) {
+    if (this.redrawBlock) {
+      if (callback) {
+        callback();
       } else {
-        this.recalcActiveRows();
+        this.redrawBlockRenderInPosition = true;
       }
+    } else {
+      this.dispatchExternal("renderStarted");
+      this.renderer.rerenderRows(callback);
+      if (!this.fixedHeight) {
+        this.adjustTableSize();
+      }
+      this.scrollBarCheck();
+      this.dispatchExternal("renderComplete");
     }
   }
-  initializeColumnCheck(column) {
-    if (column.definition.topCalc || column.definition.bottomCalc) {
-      this.initializeColumn(column);
+  scrollBarCheck() {
+    var scrollbarWidth = 0;
+    if (this.element.scrollHeight > this.element.clientHeight) {
+      scrollbarWidth = this.element.offsetWidth - this.element.clientWidth;
+    }
+    if (scrollbarWidth !== this.scrollbarWidth) {
+      this.scrollbarWidth = scrollbarWidth;
+      this.dispatch("scrollbar-vertical", scrollbarWidth);
     }
   }
-  initializeColumn(column) {
-    var def = column.definition;
-    var config = {
-      topCalcParams: def.topCalcParams || {},
-      botCalcParams: def.bottomCalcParams || {}
+  initializeRenderer() {
+    var renderClass;
+    var renderers = {
+      "virtual": VirtualDomVertical,
+      "basic": BasicVertical
     };
-    if (def.topCalc) {
-      switch (typeof def.topCalc) {
-        case "string":
-          if (ColumnCalcs.calculations[def.topCalc]) {
-            config.topCalc = ColumnCalcs.calculations[def.topCalc];
-          } else {
-            console.warn("Column Calc Error - No such calculation found, ignoring: ", def.topCalc);
-          }
-          break;
-        case "function":
-          config.topCalc = def.topCalc;
-          break;
+    if (typeof this.table.options.renderVertical === "string") {
+      renderClass = renderers[this.table.options.renderVertical];
+    } else {
+      renderClass = this.table.options.renderVertical;
+    }
+    if (renderClass) {
+      this.renderMode = this.table.options.renderVertical;
+      this.renderer = new renderClass(this.table, this.element, this.tableElement);
+      this.renderer.initialize();
+      if (this.table.element.clientHeight || this.table.options.height) {
+        this.fixedHeight = true;
+      } else {
+        this.fixedHeight = false;
       }
-      if (config.topCalc) {
-        column.modules.columnCalcs = config;
-        this.topCalcs.push(column);
-        if (this.table.options.columnCalcs != "group") {
-          this.initializeTopRow();
+    } else {
+      console.error("Unable to find matching renderer:", this.table.options.renderVertical);
+    }
+  }
+  getRenderMode() {
+    return this.renderMode;
+  }
+  renderTable() {
+    this.dispatchExternal("renderStarted");
+    this.element.scrollTop = 0;
+    this._clearTable();
+    if (this.displayRowsCount) {
+      this.renderer.renderRows();
+      if (this.firstRender) {
+        this.firstRender = false;
+        this.layoutRefresh(true);
+      }
+    } else {
+      this.renderEmptyScroll();
+    }
+    if (!this.fixedHeight) {
+      this.adjustTableSize();
+    }
+    this.dispatch("table-layout");
+    if (!this.displayRowsCount) {
+      this._showPlaceholder();
+    }
+    this.scrollBarCheck();
+    this.dispatchExternal("renderComplete");
+  }
+  renderEmptyScroll() {
+    if (this.placeholder) {
+      this.tableElement.style.display = "none";
+    } else {
+      this.tableElement.style.minWidth = this.table.columnManager.getWidth() + "px";
+    }
+  }
+  _clearTable() {
+    this._clearPlaceholder();
+    this.scrollTop = 0;
+    this.scrollLeft = 0;
+    this.renderer.clearRows();
+  }
+  _showPlaceholder() {
+    if (this.placeholder) {
+      this.placeholder.setAttribute("tabulator-render-mode", this.renderMode);
+      this.getElement().appendChild(this.placeholder);
+      this._positionPlaceholder();
+    }
+  }
+  _clearPlaceholder() {
+    if (this.placeholder && this.placeholder.parentNode) {
+      this.placeholder.parentNode.removeChild(this.placeholder);
+    }
+    this.tableElement.style.minWidth = "";
+  }
+  _positionPlaceholder() {
+    if (this.placeholder && this.placeholder.parentNode) {
+      this.placeholder.style.width = this.table.columnManager.getWidth() + "px";
+      this.placeholderContents.style.width = this.table.rowManager.element.clientWidth + "px";
+      this.placeholderContents.style.marginLeft = this.scrollLeft + "px";
+    }
+  }
+  styleRow(row, index) {
+    var rowEl = row.getElement();
+    if (index % 2) {
+      rowEl.classList.add("tabulator-row-even");
+      rowEl.classList.remove("tabulator-row-odd");
+    } else {
+      rowEl.classList.add("tabulator-row-odd");
+      rowEl.classList.remove("tabulator-row-even");
+    }
+  }
+  normalizeHeight() {
+    this.activeRows.forEach(function(row) {
+      row.normalizeHeight();
+    });
+  }
+  adjustTableSize() {
+    var initialHeight = this.element.clientHeight, minHeight;
+    if (this.renderer.verticalFillMode === "fill") {
+      let otherHeight = Math.floor(this.table.columnManager.getElement().getBoundingClientRect().height);
+      if (this.fixedHeight) {
+        minHeight = isNaN(this.table.options.minHeight) ? this.table.options.minHeight : this.table.options.minHeight + "px";
+        this.element.style.minHeight = minHeight || "calc(100% - " + otherHeight + "px)";
+        this.element.style.height = "calc(100% - " + otherHeight + "px)";
+        this.element.style.maxHeight = "calc(100% - " + otherHeight + "px)";
+      } else {
+        this.element.style.height = "";
+        this.element.style.height = this.table.element.clientHeight - otherHeight + "px";
+        this.element.scrollTop = this.scrollTop;
+      }
+      this.renderer.resize();
+      if (!this.fixedHeight && initialHeight != this.element.clientHeight) {
+        if (this.subscribed("table-resize")) {
+          this.dispatch("table-resize");
+        } else {
+          this.redraw();
+        }
+      }
+      this.scrollBarCheck();
+    }
+    this._positionPlaceholder();
+  }
+  reinitialize() {
+    this.rows.forEach(function(row) {
+      row.reinitialize(true);
+    });
+  }
+  blockRedraw() {
+    this.redrawBlock = true;
+    this.redrawBlockRestoreConfig = false;
+  }
+  restoreRedraw() {
+    this.redrawBlock = false;
+    if (this.redrawBlockRestoreConfig) {
+      this.refreshActiveData(this.redrawBlockRestoreConfig.handler, this.redrawBlockRestoreConfig.skipStage, this.redrawBlockRestoreConfig.renderInPosition);
+      this.redrawBlockRestoreConfig = false;
+    } else {
+      if (this.redrawBlockRenderInPosition) {
+        this.reRenderInPosition();
+      }
+    }
+    this.redrawBlockRenderInPosition = false;
+  }
+  redraw(force) {
+    var left = this.scrollLeft;
+    this.adjustTableSize();
+    this.table.tableWidth = this.table.element.clientWidth;
+    if (!force) {
+      this.reRenderInPosition();
+      this.scrollHorizontal(left);
+    } else {
+      this.renderTable();
+    }
+  }
+  resetScroll() {
+    this.element.scrollLeft = 0;
+    this.element.scrollTop = 0;
+    if (this.table.browser === "ie") {
+      var event = document.createEvent("Event");
+      event.initEvent("scroll", false, true);
+      this.element.dispatchEvent(event);
+    } else {
+      this.element.dispatchEvent(new Event("scroll"));
+    }
+  }
+}
+
+class InteractionManager extends CoreFeature {
+  constructor(table) {
+    super(table);
+    this.el = null;
+    this.abortClasses = ["tabulator-headers", "tabulator-table"];
+    this.previousTargets = {};
+    this.listeners = [
+      "click",
+      "dblclick",
+      "contextmenu",
+      "mouseenter",
+      "mouseleave",
+      "mouseover",
+      "mouseout",
+      "mousemove",
+      "mouseup",
+      "mousedown",
+      "touchstart",
+      "touchend"
+    ];
+    this.componentMap = {
+      "tabulator-cell": "cell",
+      "tabulator-row": "row",
+      "tabulator-group": "group",
+      "tabulator-col": "column"
+    };
+    this.pseudoTrackers = {
+      "row": {
+        subscriber: null,
+        target: null
+      },
+      "cell": {
+        subscriber: null,
+        target: null
+      },
+      "group": {
+        subscriber: null,
+        target: null
+      },
+      "column": {
+        subscriber: null,
+        target: null
+      }
+    };
+    this.pseudoTracking = false;
+  }
+  initialize() {
+    this.el = this.table.element;
+    this.buildListenerMap();
+    this.bindSubscriptionWatchers();
+  }
+  buildListenerMap() {
+    var listenerMap = {};
+    this.listeners.forEach((listener) => {
+      listenerMap[listener] = {
+        handler: null,
+        components: []
+      };
+    });
+    this.listeners = listenerMap;
+  }
+  bindPseudoEvents() {
+    Object.keys(this.pseudoTrackers).forEach((key) => {
+      this.pseudoTrackers[key].subscriber = this.pseudoMouseEnter.bind(this, key);
+      this.subscribe(key + "-mouseover", this.pseudoTrackers[key].subscriber);
+    });
+    this.pseudoTracking = true;
+  }
+  pseudoMouseEnter(key, e, target) {
+    if (this.pseudoTrackers[key].target !== target) {
+      if (this.pseudoTrackers[key].target) {
+        this.dispatch(key + "-mouseleave", e, this.pseudoTrackers[key].target);
+      }
+      this.pseudoMouseLeave(key, e);
+      this.pseudoTrackers[key].target = target;
+      this.dispatch(key + "-mouseenter", e, target);
+    }
+  }
+  pseudoMouseLeave(key, e) {
+    var leaveList = Object.keys(this.pseudoTrackers), linkedKeys = {
+      "row": ["cell"],
+      "cell": ["row"]
+    };
+    leaveList = leaveList.filter((item) => {
+      var links = linkedKeys[key];
+      return item !== key && (!links || links && !links.includes(item));
+    });
+    leaveList.forEach((key2) => {
+      var target = this.pseudoTrackers[key2].target;
+      if (this.pseudoTrackers[key2].target) {
+        this.dispatch(key2 + "-mouseleave", e, target);
+        this.pseudoTrackers[key2].target = null;
+      }
+    });
+  }
+  bindSubscriptionWatchers() {
+    var listeners = Object.keys(this.listeners), components = Object.values(this.componentMap);
+    for (let comp of components) {
+      for (let listener of listeners) {
+        let key = comp + "-" + listener;
+        this.subscriptionChange(key, this.subscriptionChanged.bind(this, comp, listener));
+      }
+    }
+    this.subscribe("table-destroy", this.clearWatchers.bind(this));
+  }
+  subscriptionChanged(component, key, added) {
+    var listener = this.listeners[key].components, index = listener.indexOf(component), changed = false;
+    if (added) {
+      if (index === -1) {
+        listener.push(component);
+        changed = true;
+      }
+    } else {
+      if (!this.subscribed(component + "-" + key)) {
+        if (index > -1) {
+          listener.splice(index, 1);
+          changed = true;
         }
       }
     }
-    if (def.bottomCalc) {
-      switch (typeof def.bottomCalc) {
-        case "string":
-          if (ColumnCalcs.calculations[def.bottomCalc]) {
-            config.botCalc = ColumnCalcs.calculations[def.bottomCalc];
-          } else {
-            console.warn("Column Calc Error - No such calculation found, ignoring: ", def.bottomCalc);
-          }
-          break;
-        case "function":
-          config.botCalc = def.bottomCalc;
-          break;
-      }
-      if (config.botCalc) {
-        column.modules.columnCalcs = config;
-        this.botCalcs.push(column);
-        if (this.table.options.columnCalcs != "group") {
-          this.initializeBottomRow();
-        }
-      }
-    }
-  }
-  registerColumnField() {
-  }
-  removeCalcs() {
-    var changed = false;
-    if (this.topInitialized) {
-      this.topInitialized = false;
-      this.topElement.parentNode.removeChild(this.topElement);
-      changed = true;
-    }
-    if (this.botInitialized) {
-      this.botInitialized = false;
-      this.footerRemove(this.botElement);
-      changed = true;
+    if ((key === "mouseenter" || key === "mouseleave") && !this.pseudoTracking) {
+      this.bindPseudoEvents();
     }
     if (changed) {
-      this.table.rowManager.adjustTableSize();
+      this.updateEventListeners();
     }
   }
-  reinitializeCalcs() {
-    if (this.topCalcs.length) {
-      this.initializeTopRow();
-    }
-    if (this.botCalcs.length) {
-      this.initializeBottomRow();
-    }
-  }
-  initializeTopRow() {
-    if (!this.topInitialized) {
-      this.table.columnManager.getContentsElement().insertBefore(this.topElement, this.table.columnManager.headersElement.nextSibling);
-      this.topInitialized = true;
-    }
-  }
-  initializeBottomRow() {
-    if (!this.botInitialized) {
-      this.footerPrepend(this.botElement);
-      this.botInitialized = true;
-    }
-  }
-  scrollHorizontal(left) {
-    if (this.botInitialized && this.botRow) {
-      this.botElement.scrollLeft = left;
-    }
-  }
-  recalc(rows) {
-    var data, row;
-    if (!this.blockCheck()) {
-      if (this.topInitialized || this.botInitialized) {
-        data = this.rowsToData(rows);
-        if (this.topInitialized) {
-          if (this.topRow) {
-            this.topRow.deleteCells();
-          }
-          row = this.generateRow("top", data);
-          this.topRow = row;
-          while (this.topElement.firstChild)
-            this.topElement.removeChild(this.topElement.firstChild);
-          this.topElement.appendChild(row.getElement());
-          row.initialize(true);
+  updateEventListeners() {
+    for (let key in this.listeners) {
+      let listener = this.listeners[key];
+      if (listener.components.length) {
+        if (!listener.handler) {
+          listener.handler = this.track.bind(this, key);
+          this.el.addEventListener(key, listener.handler);
         }
-        if (this.botInitialized) {
-          if (this.botRow) {
-            this.botRow.deleteCells();
-          }
-          row = this.generateRow("bottom", data);
-          this.botRow = row;
-          while (this.botElement.firstChild)
-            this.botElement.removeChild(this.botElement.firstChild);
-          this.botElement.appendChild(row.getElement());
-          row.initialize(true);
-        }
-        this.table.rowManager.adjustTableSize();
-        if (this.table.modExists("frozenColumns")) {
-          this.table.modules.frozenColumns.layout();
-        }
-      }
-    }
-  }
-  recalcRowGroup(row) {
-    this.recalcGroup(this.table.modules.groupRows.getRowGroup(row));
-  }
-  recalcAll() {
-    if (this.topCalcs.length || this.botCalcs.length) {
-      if (this.table.options.columnCalcs !== "group") {
-        this.recalcActiveRows();
-      }
-      if (this.table.options.groupBy && this.table.options.columnCalcs !== "table") {
-        var groups = this.table.modules.groupRows.getChildGroups();
-        groups.forEach((group) => {
-          this.recalcGroup(group);
-        });
-      }
-    }
-  }
-  recalcGroup(group) {
-    var data, rowData;
-    if (!this.blockCheck()) {
-      if (group) {
-        if (group.calcs) {
-          if (group.calcs.bottom) {
-            data = this.rowsToData(group.rows);
-            rowData = this.generateRowData("bottom", data);
-            group.calcs.bottom.updateData(rowData);
-            group.calcs.bottom.reinitialize();
-          }
-          if (group.calcs.top) {
-            data = this.rowsToData(group.rows);
-            rowData = this.generateRowData("top", data);
-            group.calcs.top.updateData(rowData);
-            group.calcs.top.reinitialize();
-          }
-        }
-      }
-    }
-  }
-  generateTopRow(rows) {
-    return this.generateRow("top", this.rowsToData(rows));
-  }
-  generateBottomRow(rows) {
-    return this.generateRow("bottom", this.rowsToData(rows));
-  }
-  rowsToData(rows) {
-    var data = [];
-    rows.forEach((row) => {
-      data.push(row.getData());
-      if (this.table.options.dataTree && this.table.options.dataTreeChildColumnCalcs) {
-        if (row.modules.dataTree && row.modules.dataTree.open) {
-          var children = this.rowsToData(this.table.modules.dataTree.getFilteredTreeChildren(row));
-          data = data.concat(children);
-        }
-      }
-    });
-    return data;
-  }
-  generateRow(pos, data) {
-    var rowData = this.generateRowData(pos, data), row;
-    if (this.table.modExists("mutator")) {
-      this.table.modules.mutator.disable();
-    }
-    row = new Row(rowData, this, "calc");
-    if (this.table.modExists("mutator")) {
-      this.table.modules.mutator.enable();
-    }
-    row.getElement().classList.add("tabulator-calcs", "tabulator-calcs-" + pos);
-    row.component = false;
-    row.getComponent = () => {
-      if (!row.component) {
-        row.component = new CalcComponent(row);
-      }
-      return row.component;
-    };
-    row.generateCells = () => {
-      var cells = [];
-      this.table.columnManager.columnsByIndex.forEach((column) => {
-        this.genColumn.setField(column.getField());
-        this.genColumn.hozAlign = column.hozAlign;
-        if (column.definition[pos + "CalcFormatter"] && this.table.modExists("format")) {
-          this.genColumn.modules.format = {
-            formatter: this.table.modules.format.getFormatter(column.definition[pos + "CalcFormatter"]),
-            params: column.definition[pos + "CalcFormatterParams"] || {}
-          };
-        } else {
-          this.genColumn.modules.format = {
-            formatter: this.table.modules.format.getFormatter("plaintext"),
-            params: {}
-          };
-        }
-        this.genColumn.definition.cssClass = column.definition.cssClass;
-        var cell = new Cell(this.genColumn, row);
-        cell.getElement();
-        cell.column = column;
-        cell.setWidth();
-        column.cells.push(cell);
-        cells.push(cell);
-        if (!column.visible) {
-          cell.hide();
-        }
-      });
-      row.cells = cells;
-    };
-    return row;
-  }
-  generateRowData(pos, data) {
-    var rowData = {}, calcs = pos == "top" ? this.topCalcs : this.botCalcs, type = pos == "top" ? "topCalc" : "botCalc", params, paramKey;
-    calcs.forEach(function(column) {
-      var values = [];
-      if (column.modules.columnCalcs && column.modules.columnCalcs[type]) {
-        data.forEach(function(item) {
-          values.push(column.getFieldValue(item));
-        });
-        paramKey = type + "Params";
-        params = typeof column.modules.columnCalcs[paramKey] === "function" ? column.modules.columnCalcs[paramKey](values, data) : column.modules.columnCalcs[paramKey];
-        column.setFieldValue(rowData, column.modules.columnCalcs[type](values, data, params));
-      }
-    });
-    return rowData;
-  }
-  hasTopCalcs() {
-    return !!this.topCalcs.length;
-  }
-  hasBottomCalcs() {
-    return !!this.botCalcs.length;
-  }
-  redraw() {
-    if (this.topRow) {
-      this.topRow.normalizeHeight(true);
-    }
-    if (this.botRow) {
-      this.botRow.normalizeHeight(true);
-    }
-  }
-  getResults() {
-    var results = {}, groups;
-    if (this.table.options.groupBy && this.table.modExists("groupRows")) {
-      groups = this.table.modules.groupRows.getGroups(true);
-      groups.forEach((group) => {
-        results[group.getKey()] = this.getGroupResults(group);
-      });
-    } else {
-      results = {
-        top: this.topRow ? this.topRow.getData() : {},
-        bottom: this.botRow ? this.botRow.getData() : {}
-      };
-    }
-    return results;
-  }
-  getGroupResults(group) {
-    var groupObj = group._getSelf(), subGroups = group.getSubGroups(), subGroupResults = {}, results = {};
-    subGroups.forEach((subgroup) => {
-      subGroupResults[subgroup.getKey()] = this.getGroupResults(subgroup);
-    });
-    results = {
-      top: groupObj.calcs.top ? groupObj.calcs.top.getData() : {},
-      bottom: groupObj.calcs.bottom ? groupObj.calcs.bottom.getData() : {},
-      groups: subGroupResults
-    };
-    return results;
-  }
-  adjustForScrollbar(width) {
-    if (this.botRow) {
-      if (this.table.rtl) {
-        this.botElement.style.paddingLeft = width + "px";
       } else {
-        this.botElement.style.paddingRight = width + "px";
+        if (listener.handler) {
+          this.el.removeEventListener(key, listener.handler);
+          listener.handler = null;
+        }
+      }
+    }
+  }
+  track(type, e) {
+    var path = e.composedPath && e.composedPath() || e.path;
+    var targets = this.findTargets(path);
+    targets = this.bindComponents(type, targets);
+    this.triggerEvents(type, e, targets);
+    if (this.pseudoTracking && (type == "mouseover" || type == "mouseleave") && !Object.keys(targets).length) {
+      this.pseudoMouseLeave("none", e);
+    }
+  }
+  findTargets(path) {
+    var targets = {};
+    let componentMap = Object.keys(this.componentMap);
+    for (let el of path) {
+      let classList = el.classList ? [...el.classList] : [];
+      let abort = classList.filter((item) => {
+        return this.abortClasses.includes(item);
+      });
+      if (abort.length) {
+        break;
+      }
+      let elTargets = classList.filter((item) => {
+        return componentMap.includes(item);
+      });
+      for (let target of elTargets) {
+        if (!targets[this.componentMap[target]]) {
+          targets[this.componentMap[target]] = el;
+        }
+      }
+    }
+    if (targets.group && targets.group === targets.row) {
+      delete targets.row;
+    }
+    return targets;
+  }
+  bindComponents(type, targets) {
+    var keys = Object.keys(targets).reverse(), listener = this.listeners[type], matches = {}, targetMatches = {};
+    for (let key of keys) {
+      let component, target = targets[key], previousTarget = this.previousTargets[key];
+      if (previousTarget && previousTarget.target === target) {
+        component = previousTarget.component;
+      } else {
+        switch (key) {
+          case "row":
+          case "group":
+            if (listener.components.includes("row") || listener.components.includes("cell") || listener.components.includes("group")) {
+              let rows = this.table.rowManager.getVisibleRows(true);
+              component = rows.find((row) => {
+                return row.getElement() === target;
+              });
+              if (targets["row"] && targets["row"].parentNode && targets["row"].parentNode.closest(".tabulator-row")) {
+                targets[key] = false;
+              }
+            }
+            break;
+          case "column":
+            if (listener.components.includes("column")) {
+              component = this.table.columnManager.findColumn(target);
+            }
+            break;
+          case "cell":
+            if (listener.components.includes("cell")) {
+              if (matches["row"] instanceof Row) {
+                component = matches["row"].findCell(target);
+              } else {
+                if (targets["row"]) {
+                  console.warn("Event Target Lookup Error - The row this cell is attached to cannot be found, has the table been reinitialized without being destroyed first?");
+                }
+              }
+            }
+            break;
+        }
+      }
+      if (component) {
+        matches[key] = component;
+        targetMatches[key] = {
+          target,
+          component
+        };
+      }
+    }
+    this.previousTargets = targetMatches;
+    return matches;
+  }
+  triggerEvents(type, e, targets) {
+    var listener = this.listeners[type];
+    for (let key in targets) {
+      if (targets[key] && listener.components.includes(key)) {
+        this.dispatch(key + "-" + type, e, targets[key]);
+      }
+    }
+  }
+  clearWatchers() {
+    for (let key in this.listeners) {
+      let listener = this.listeners[key];
+      if (listener.handler) {
+        this.el.removeEventListener(key, listener.handler);
+        listener.handler = null;
       }
     }
   }
 }
-ColumnCalcs.moduleName = "columnCalcs";
-ColumnCalcs.calculations = defaultCalculations;
+
+class ComponentFunctionBinder {
+  constructor(table) {
+    this.table = table;
+    this.bindings = {};
+  }
+  bind(type, funcName, handler) {
+    if (!this.bindings[type]) {
+      this.bindings[type] = {};
+    }
+    if (this.bindings[type][funcName]) {
+      console.warn("Unable to bind component handler, a matching function name is already bound", type, funcName, handler);
+    } else {
+      this.bindings[type][funcName] = handler;
+    }
+  }
+  handle(type, component, name) {
+    if (this.bindings[type] && this.bindings[type][name] && typeof this.bindings[type][name].bind === "function") {
+      return this.bindings[type][name].bind(null, component);
+    } else {
+      if (name !== "then" && typeof name === "string" && !name.startsWith("_")) {
+        if (this.table.options.debugInvalidComponentFuncs) {
+          console.error("The " + type + " component does not have a " + name + " function, have you checked that you have the correct Tabulator module installed?");
+        }
+      }
+    }
+  }
+}
+
+class DataLoader extends CoreFeature {
+  constructor(table) {
+    super(table);
+    this.requestOrder = 0;
+    this.loading = false;
+  }
+  initialize() {
+  }
+  load(data, params, config, replace, silent, columnsChanged) {
+    var requestNo = ++this.requestOrder;
+    this.dispatchExternal("dataLoading", data);
+    if (data && (data.indexOf("{") == 0 || data.indexOf("[") == 0)) {
+      data = JSON.parse(data);
+    }
+    if (this.confirm("data-loading", [data, params, config, silent])) {
+      this.loading = true;
+      if (!silent) {
+        this.alertLoader();
+      }
+      params = this.chain("data-params", [data, config, silent], params || {}, params || {});
+      params = this.mapParams(params, this.table.options.dataSendParams);
+      var result = this.chain("data-load", [data, params, config, silent], false, Promise.resolve([]));
+      return result.then((response) => {
+        if (!Array.isArray(response) && typeof response == "object") {
+          response = this.mapParams(response, this.objectInvert(this.table.options.dataReceiveParams));
+        }
+        var rowData = this.chain("data-loaded", response, null, response);
+        if (requestNo == this.requestOrder) {
+          this.clearAlert();
+          if (rowData !== false) {
+            this.dispatchExternal("dataLoaded", rowData);
+            this.table.rowManager.setData(rowData, replace, typeof columnsChanged === "undefined" ? !replace : columnsChanged);
+          }
+        } else {
+          console.warn("Data Load Response Blocked - An active data load request was blocked by an attempt to change table data while the request was being made");
+        }
+      }).catch((error) => {
+        console.error("Data Load Error: ", error);
+        this.dispatchExternal("dataLoadError", error);
+        if (!silent) {
+          this.alertError();
+        }
+        setTimeout(() => {
+          this.clearAlert();
+        }, this.table.options.dataLoaderErrorTimeout);
+      }).finally(() => {
+        this.loading = false;
+      });
+    } else {
+      this.dispatchExternal("dataLoaded", data);
+      if (!data) {
+        data = [];
+      }
+      this.table.rowManager.setData(data, replace, typeof columnsChanged === "undefined" ? !replace : columnsChanged);
+      return Promise.resolve();
+    }
+  }
+  mapParams(params, map) {
+    var output = {};
+    for (let key in params) {
+      output[map.hasOwnProperty(key) ? map[key] : key] = params[key];
+    }
+    return output;
+  }
+  objectInvert(obj) {
+    var output = {};
+    for (let key in obj) {
+      output[obj[key]] = key;
+    }
+    return output;
+  }
+  blockActiveLoad() {
+    this.requestOrder++;
+  }
+  alertLoader() {
+    var shouldLoad = typeof this.table.options.dataLoader === "function" ? this.table.options.dataLoader() : this.table.options.dataLoader;
+    if (shouldLoad) {
+      this.table.alertManager.alert(this.table.options.dataLoaderLoading || this.langText("data|loading"));
+    }
+  }
+  alertError() {
+    this.table.alertManager.alert(this.table.options.dataLoaderError || this.langText("data|error"), "error");
+  }
+  clearAlert() {
+    this.table.alertManager.clear();
+  }
+}
+
+class ExternalEventBus {
+  constructor(table, optionsList, debug) {
+    this.table = table;
+    this.events = {};
+    this.optionsList = optionsList || {};
+    this.subscriptionNotifiers = {};
+    this.dispatch = debug ? this._debugDispatch.bind(this) : this._dispatch.bind(this);
+    this.debug = debug;
+  }
+  subscriptionChange(key, callback) {
+    if (!this.subscriptionNotifiers[key]) {
+      this.subscriptionNotifiers[key] = [];
+    }
+    this.subscriptionNotifiers[key].push(callback);
+    if (this.subscribed(key)) {
+      this._notifySubscriptionChange(key, true);
+    }
+  }
+  subscribe(key, callback) {
+    if (!this.events[key]) {
+      this.events[key] = [];
+    }
+    this.events[key].push(callback);
+    this._notifySubscriptionChange(key, true);
+  }
+  unsubscribe(key, callback) {
+    var index;
+    if (this.events[key]) {
+      if (callback) {
+        index = this.events[key].findIndex((item) => {
+          return item === callback;
+        });
+        if (index > -1) {
+          this.events[key].splice(index, 1);
+        } else {
+          console.warn("Cannot remove event, no matching event found:", key, callback);
+          return;
+        }
+      } else {
+        delete this.events[key];
+      }
+    } else {
+      console.warn("Cannot remove event, no events set on:", key);
+      return;
+    }
+    this._notifySubscriptionChange(key, false);
+  }
+  subscribed(key) {
+    return this.events[key] && this.events[key].length;
+  }
+  _notifySubscriptionChange(key, subscribed) {
+    var notifiers = this.subscriptionNotifiers[key];
+    if (notifiers) {
+      notifiers.forEach((callback) => {
+        callback(subscribed);
+      });
+    }
+  }
+  _dispatch() {
+    var args = Array.from(arguments), key = args.shift(), result;
+    if (this.events[key]) {
+      this.events[key].forEach((callback, i) => {
+        let callResult = callback.apply(this.table, args);
+        if (!i) {
+          result = callResult;
+        }
+      });
+    }
+    return result;
+  }
+  _debugDispatch() {
+    var args = Array.from(arguments), key = args[0];
+    args[0] = "ExternalEvent:" + args[0];
+    if (this.debug === true || this.debug.includes(key)) {
+      console.log(...args);
+    }
+    return this._dispatch(...arguments);
+  }
+}
+
+class InternalEventBus {
+  constructor(debug) {
+    this.events = {};
+    this.subscriptionNotifiers = {};
+    this.dispatch = debug ? this._debugDispatch.bind(this) : this._dispatch.bind(this);
+    this.chain = debug ? this._debugChain.bind(this) : this._chain.bind(this);
+    this.confirm = debug ? this._debugConfirm.bind(this) : this._confirm.bind(this);
+    this.debug = debug;
+  }
+  subscriptionChange(key, callback) {
+    if (!this.subscriptionNotifiers[key]) {
+      this.subscriptionNotifiers[key] = [];
+    }
+    this.subscriptionNotifiers[key].push(callback);
+    if (this.subscribed(key)) {
+      this._notifySubscriptionChange(key, true);
+    }
+  }
+  subscribe(key, callback, priority = 1e4) {
+    if (!this.events[key]) {
+      this.events[key] = [];
+    }
+    this.events[key].push({ callback, priority });
+    this.events[key].sort((a, b) => {
+      return a.priority - b.priority;
+    });
+    this._notifySubscriptionChange(key, true);
+  }
+  unsubscribe(key, callback) {
+    var index;
+    if (this.events[key]) {
+      if (callback) {
+        index = this.events[key].findIndex((item) => {
+          return item.callback === callback;
+        });
+        if (index > -1) {
+          this.events[key].splice(index, 1);
+        } else {
+          console.warn("Cannot remove event, no matching event found:", key, callback);
+          return;
+        }
+      }
+    } else {
+      console.warn("Cannot remove event, no events set on:", key);
+      return;
+    }
+    this._notifySubscriptionChange(key, false);
+  }
+  subscribed(key) {
+    return this.events[key] && this.events[key].length;
+  }
+  _chain(key, args, initialValue, fallback) {
+    var value = initialValue;
+    if (!Array.isArray(args)) {
+      args = [args];
+    }
+    if (this.subscribed(key)) {
+      this.events[key].forEach((subscriber, i) => {
+        value = subscriber.callback.apply(this, args.concat([value]));
+      });
+      return value;
+    } else {
+      return typeof fallback === "function" ? fallback() : fallback;
+    }
+  }
+  _confirm(key, args) {
+    var confirmed = false;
+    if (!Array.isArray(args)) {
+      args = [args];
+    }
+    if (this.subscribed(key)) {
+      this.events[key].forEach((subscriber, i) => {
+        if (subscriber.callback.apply(this, args)) {
+          confirmed = true;
+        }
+      });
+    }
+    return confirmed;
+  }
+  _notifySubscriptionChange(key, subscribed) {
+    var notifiers = this.subscriptionNotifiers[key];
+    if (notifiers) {
+      notifiers.forEach((callback) => {
+        callback(subscribed);
+      });
+    }
+  }
+  _dispatch() {
+    var args = Array.from(arguments), key = args.shift();
+    if (this.events[key]) {
+      this.events[key].forEach((subscriber) => {
+        subscriber.callback.apply(this, args);
+      });
+    }
+  }
+  _debugDispatch() {
+    var args = Array.from(arguments), key = args[0];
+    args[0] = "InternalEvent:" + key;
+    if (this.debug === true || this.debug.includes(key)) {
+      console.log(...args);
+    }
+    return this._dispatch(...arguments);
+  }
+  _debugChain() {
+    var args = Array.from(arguments), key = args[0];
+    args[0] = "InternalEvent:" + key;
+    if (this.debug === true || this.debug.includes(key)) {
+      console.log(...args);
+    }
+    return this._chain(...arguments);
+  }
+  _debugConfirm() {
+    var args = Array.from(arguments), key = args[0];
+    args[0] = "InternalEvent:" + key;
+    if (this.debug === true || this.debug.includes(key)) {
+      console.log(...args);
+    }
+    return this._confirm(...arguments);
+  }
+}
+
+class TableRegistry {
+  static register(table) {
+    TableRegistry.tables.push(table);
+  }
+  static deregister(table) {
+    var index = TableRegistry.tables.indexOf(table);
+    if (index > -1) {
+      TableRegistry.tables.splice(index, 1);
+    }
+  }
+  static lookupTable(query, silent) {
+    var results = [], matches, match;
+    if (typeof query === "string") {
+      matches = document.querySelectorAll(query);
+      if (matches.length) {
+        for (var i = 0; i < matches.length; i++) {
+          match = TableRegistry.matchElement(matches[i]);
+          if (match) {
+            results.push(match);
+          }
+        }
+      }
+    } else if (typeof HTMLElement !== "undefined" && query instanceof HTMLElement || query instanceof Tabulator) {
+      match = TableRegistry.matchElement(query);
+      if (match) {
+        results.push(match);
+      }
+    } else if (Array.isArray(query)) {
+      query.forEach(function(item) {
+        results = results.concat(TableRegistry.lookupTable(item));
+      });
+    } else {
+      if (!silent) {
+        console.warn("Table Connection Error - Invalid Selector", query);
+      }
+    }
+    return results;
+  }
+  static matchElement(element) {
+    return TableRegistry.tables.find(function(table) {
+      return element instanceof Tabulator ? table === element : table.element === element;
+    });
+  }
+}
+TableRegistry.tables = [];
+
+class Popup extends CoreFeature {
+  constructor(table, element, parent) {
+    super(table);
+    this.element = element;
+    this.container = this._lookupContainer();
+    this.parent = parent;
+    this.reversedX = false;
+    this.childPopup = null;
+    this.blurable = false;
+    this.blurCallback = null;
+    this.blurEventsBound = false;
+    this.renderedCallback = null;
+    this.visible = false;
+    this.hideable = true;
+    this.element.classList.add("tabulator-popup-container");
+    this.blurEvent = this.hide.bind(this, false);
+    this.escEvent = this._escapeCheck.bind(this);
+    this.destroyBinding = this.tableDestroyed;
+    this.destroyed = false;
+  }
+  tableDestroyed() {
+    this.destroyed = true;
+    this.hide(true);
+  }
+  _lookupContainer() {
+    var container = this.table.options.popupContainer;
+    if (typeof container === "string") {
+      container = document.querySelector(container);
+      if (!container) {
+        console.warn("Menu Error - no container element found matching selector:", this.table.options.popupContainer, "(defaulting to document body)");
+      }
+    } else if (container === true) {
+      container = this.table.element;
+    }
+    if (container && !this._checkContainerIsParent(container)) {
+      container = false;
+      console.warn("Menu Error - container element does not contain this table:", this.table.options.popupContainer, "(defaulting to document body)");
+    }
+    if (!container) {
+      container = document.body;
+    }
+    return container;
+  }
+  _checkContainerIsParent(container, element = this.table.element) {
+    if (container === element) {
+      return true;
+    } else {
+      return element.parentNode ? this._checkContainerIsParent(container, element.parentNode) : false;
+    }
+  }
+  renderCallback(callback) {
+    this.renderedCallback = callback;
+  }
+  containerEventCoords(e) {
+    var touch = !(e instanceof MouseEvent);
+    var x = touch ? e.touches[0].pageX : e.pageX;
+    var y = touch ? e.touches[0].pageY : e.pageY;
+    if (this.container !== document.body) {
+      let parentOffset = Helpers.elOffset(this.container);
+      x -= parentOffset.left;
+      y -= parentOffset.top;
+    }
+    return { x, y };
+  }
+  elementPositionCoords(element, position = "right") {
+    var offset = Helpers.elOffset(element), containerOffset, x, y;
+    if (this.container !== document.body) {
+      containerOffset = Helpers.elOffset(this.container);
+      offset.left -= containerOffset.left;
+      offset.top -= containerOffset.top;
+    }
+    switch (position) {
+      case "right":
+        x = offset.left + element.offsetWidth;
+        y = offset.top - 1;
+        break;
+      case "bottom":
+        x = offset.left;
+        y = offset.top + element.offsetHeight;
+        break;
+      case "left":
+        x = offset.left;
+        y = offset.top - 1;
+        break;
+      case "top":
+        x = offset.left;
+        y = offset.top;
+        break;
+      case "center":
+        x = offset.left + element.offsetWidth / 2;
+        y = offset.top + element.offsetHeight / 2;
+        break;
+    }
+    return { x, y, offset };
+  }
+  show(origin, position) {
+    var x, y, parentEl, parentOffset, coords;
+    if (this.destroyed || this.table.destroyed) {
+      return this;
+    }
+    if (origin instanceof HTMLElement) {
+      parentEl = origin;
+      coords = this.elementPositionCoords(origin, position);
+      parentOffset = coords.offset;
+      x = coords.x;
+      y = coords.y;
+    } else if (typeof origin === "number") {
+      parentOffset = { top: 0, left: 0 };
+      x = origin;
+      y = position;
+    } else {
+      coords = this.containerEventCoords(origin);
+      x = coords.x;
+      y = coords.y;
+      this.reversedX = false;
+    }
+    this.element.style.top = y + "px";
+    this.element.style.left = x + "px";
+    this.container.appendChild(this.element);
+    if (typeof this.renderedCallback === "function") {
+      this.renderedCallback();
+    }
+    this._fitToScreen(x, y, parentEl, parentOffset, position);
+    this.visible = true;
+    this.subscribe("table-destroy", this.destroyBinding);
+    this.element.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+    });
+    return this;
+  }
+  _fitToScreen(x, y, parentEl, parentOffset, position) {
+    var scrollTop = this.container === document.body ? document.documentElement.scrollTop : this.container.scrollTop;
+    if (x + this.element.offsetWidth >= this.container.offsetWidth || this.reversedX) {
+      this.element.style.left = "";
+      if (parentEl) {
+        this.element.style.right = this.container.offsetWidth - parentOffset.left + "px";
+      } else {
+        this.element.style.right = this.container.offsetWidth - x + "px";
+      }
+      this.reversedX = true;
+    }
+    if (y + this.element.offsetHeight > Math.max(this.container.offsetHeight, scrollTop ? this.container.scrollHeight : 0)) {
+      if (parentEl) {
+        switch (position) {
+          case "bottom":
+            this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight - parentEl.offsetHeight - 1 + "px";
+            break;
+          default:
+            this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight + parentEl.offsetHeight + 1 + "px";
+        }
+      } else {
+        this.element.style.top = parseInt(this.element.style.top) - this.element.offsetHeight + "px";
+      }
+    }
+  }
+  isVisible() {
+    return this.visible;
+  }
+  hideOnBlur(callback) {
+    this.blurable = true;
+    if (this.visible) {
+      setTimeout(() => {
+        if (this.visible) {
+          this.table.rowManager.element.addEventListener("scroll", this.blurEvent);
+          this.subscribe("cell-editing", this.blurEvent);
+          document.body.addEventListener("click", this.blurEvent);
+          document.body.addEventListener("contextmenu", this.blurEvent);
+          document.body.addEventListener("mousedown", this.blurEvent);
+          window.addEventListener("resize", this.blurEvent);
+          document.body.addEventListener("keydown", this.escEvent);
+          this.blurEventsBound = true;
+        }
+      }, 100);
+      this.blurCallback = callback;
+    }
+    return this;
+  }
+  _escapeCheck(e) {
+    if (e.keyCode == 27) {
+      this.hide();
+    }
+  }
+  blockHide() {
+    this.hideable = false;
+  }
+  restoreHide() {
+    this.hideable = true;
+  }
+  hide(silent = false) {
+    if (this.visible && this.hideable) {
+      if (this.blurable && this.blurEventsBound) {
+        document.body.removeEventListener("keydown", this.escEvent);
+        document.body.removeEventListener("click", this.blurEvent);
+        document.body.removeEventListener("contextmenu", this.blurEvent);
+        document.body.removeEventListener("mousedown", this.blurEvent);
+        window.removeEventListener("resize", this.blurEvent);
+        this.table.rowManager.element.removeEventListener("scroll", this.blurEvent);
+        this.unsubscribe("cell-editing", this.blurEvent);
+        this.blurEventsBound = false;
+      }
+      if (this.childPopup) {
+        this.childPopup.hide();
+      }
+      if (this.parent) {
+        this.parent.childPopup = null;
+      }
+      if (this.element.parentNode) {
+        this.element.parentNode.removeChild(this.element);
+      }
+      this.visible = false;
+      if (this.blurCallback && !silent) {
+        this.blurCallback();
+      }
+      this.unsubscribe("table-destroy", this.destroyBinding);
+    }
+    return this;
+  }
+  child(element) {
+    if (this.childPopup) {
+      this.childPopup.hide();
+    }
+    this.childPopup = new Popup(this.table, element, this);
+    return this.childPopup;
+  }
+}
+
+class Module extends CoreFeature {
+  constructor(table, name) {
+    super(table);
+    this._handler = null;
+  }
+  initialize() {
+  }
+  registerTableOption(key, value) {
+    this.table.optionsList.register(key, value);
+  }
+  registerColumnOption(key, value) {
+    this.table.columnManager.optionsList.register(key, value);
+  }
+  registerTableFunction(name, func) {
+    if (typeof this.table[name] === "undefined") {
+      this.table[name] = (...args) => {
+        this.table.initGuard(name);
+        return func(...args);
+      };
+    } else {
+      console.warn("Unable to bind table function, name already in use", name);
+    }
+  }
+  registerComponentFunction(component, func, handler) {
+    return this.table.componentFunctionBinder.bind(component, func, handler);
+  }
+  registerDataHandler(handler, priority) {
+    this.table.rowManager.registerDataPipelineHandler(handler, priority);
+    this._handler = handler;
+  }
+  registerDisplayHandler(handler, priority) {
+    this.table.rowManager.registerDisplayPipelineHandler(handler, priority);
+    this._handler = handler;
+  }
+  displayRows(adjust) {
+    var index = this.table.rowManager.displayRows.length - 1, lookupIndex;
+    if (this._handler) {
+      lookupIndex = this.table.rowManager.displayPipeline.findIndex((item) => {
+        return item.handler === this._handler;
+      });
+      if (lookupIndex > -1) {
+        index = lookupIndex;
+      }
+    }
+    if (adjust) {
+      index = index + adjust;
+    }
+    if (this._handler) {
+      if (index > -1) {
+        return this.table.rowManager.getDisplayRows(index);
+      } else {
+        return this.activeRows();
+      }
+    }
+  }
+  activeRows() {
+    return this.table.rowManager.activeRows;
+  }
+  refreshData(renderInPosition, handler) {
+    if (!handler) {
+      handler = this._handler;
+    }
+    if (handler) {
+      this.table.rowManager.refreshActiveData(handler, false, renderInPosition);
+    }
+  }
+  footerAppend(element) {
+    return this.table.footerManager.append(element);
+  }
+  footerPrepend(element) {
+    return this.table.footerManager.prepend(element);
+  }
+  footerRemove(element) {
+    return this.table.footerManager.remove(element);
+  }
+  popup(menuEl, menuContainer) {
+    return new Popup(this.table, menuEl, menuContainer);
+  }
+  alert(content, type) {
+    return this.table.alertManager.alert(content, type);
+  }
+  clearAlert() {
+    return this.table.alertManager.clear();
+  }
+}
+
+function fitData(columns, forced) {
+  if (forced) {
+    this.table.columnManager.renderer.reinitializeColumnWidths(columns);
+  }
+  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
+    this.table.modules.responsiveLayout.update();
+  }
+}
+
+function fitDataGeneral(columns, forced) {
+  columns.forEach(function(column) {
+    column.reinitializeWidth();
+  });
+  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
+    this.table.modules.responsiveLayout.update();
+  }
+}
+
+function fitDataStretch(columns, forced) {
+  var colsWidth = 0, tableWidth = this.table.rowManager.element.clientWidth, gap = 0, lastCol = false;
+  columns.forEach((column, i) => {
+    if (!column.widthFixed) {
+      column.reinitializeWidth();
+    }
+    if (this.table.options.responsiveLayout ? column.modules.responsive.visible : column.visible) {
+      lastCol = column;
+    }
+    if (column.visible) {
+      colsWidth += column.getWidth();
+    }
+  });
+  if (lastCol) {
+    gap = tableWidth - colsWidth + lastCol.getWidth();
+    if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
+      lastCol.setWidth(0);
+      this.table.modules.responsiveLayout.update();
+    }
+    if (gap > 0) {
+      lastCol.setWidth(gap);
+    } else {
+      lastCol.reinitializeWidth();
+    }
+  } else {
+    if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
+      this.table.modules.responsiveLayout.update();
+    }
+  }
+}
+
+function fitColumns(columns, forced) {
+  var totalWidth = this.table.rowManager.element.getBoundingClientRect().width;
+  var fixedWidth = 0;
+  var flexWidth = 0;
+  var flexGrowUnits = 0;
+  var flexColWidth = 0;
+  var flexColumns = [];
+  var fixedShrinkColumns = [];
+  var flexShrinkUnits = 0;
+  var overflowWidth = 0;
+  var gapFill = 0;
+  function calcWidth(width) {
+    var colWidth;
+    if (typeof width == "string") {
+      if (width.indexOf("%") > -1) {
+        colWidth = totalWidth / 100 * parseInt(width);
+      } else {
+        colWidth = parseInt(width);
+      }
+    } else {
+      colWidth = width;
+    }
+    return colWidth;
+  }
+  function scaleColumns(columns2, freeSpace, colWidth, shrinkCols) {
+    var oversizeCols = [], oversizeSpace = 0, remainingSpace = 0, nextColWidth = 0, remainingFlexGrowUnits = flexGrowUnits, gap = 0, changeUnits = 0, undersizeCols = [];
+    function calcGrow(col) {
+      return colWidth * (col.column.definition.widthGrow || 1);
+    }
+    function calcShrink(col) {
+      return calcWidth(col.width) - colWidth * (col.column.definition.widthShrink || 0);
+    }
+    columns2.forEach(function(col, i) {
+      var width = shrinkCols ? calcShrink(col) : calcGrow(col);
+      if (col.column.minWidth >= width) {
+        oversizeCols.push(col);
+      } else {
+        if (col.column.maxWidth && col.column.maxWidth < width) {
+          col.width = col.column.maxWidth;
+          freeSpace -= col.column.maxWidth;
+          remainingFlexGrowUnits -= shrinkCols ? col.column.definition.widthShrink || 1 : col.column.definition.widthGrow || 1;
+          if (remainingFlexGrowUnits) {
+            colWidth = Math.floor(freeSpace / remainingFlexGrowUnits);
+          }
+        } else {
+          undersizeCols.push(col);
+          changeUnits += shrinkCols ? col.column.definition.widthShrink || 1 : col.column.definition.widthGrow || 1;
+        }
+      }
+    });
+    if (oversizeCols.length) {
+      oversizeCols.forEach(function(col) {
+        oversizeSpace += shrinkCols ? col.width - col.column.minWidth : col.column.minWidth;
+        col.width = col.column.minWidth;
+      });
+      remainingSpace = freeSpace - oversizeSpace;
+      nextColWidth = changeUnits ? Math.floor(remainingSpace / changeUnits) : remainingSpace;
+      gap = scaleColumns(undersizeCols, remainingSpace, nextColWidth, shrinkCols);
+    } else {
+      gap = changeUnits ? freeSpace - Math.floor(freeSpace / changeUnits) * changeUnits : freeSpace;
+      undersizeCols.forEach(function(column) {
+        column.width = shrinkCols ? calcShrink(column) : calcGrow(column);
+      });
+    }
+    return gap;
+  }
+  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
+    this.table.modules.responsiveLayout.update();
+  }
+  if (this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight) {
+    totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
+  }
+  columns.forEach(function(column) {
+    var width, minWidth, colWidth;
+    if (column.visible) {
+      width = column.definition.width;
+      minWidth = parseInt(column.minWidth);
+      if (width) {
+        colWidth = calcWidth(width);
+        fixedWidth += colWidth > minWidth ? colWidth : minWidth;
+        if (column.definition.widthShrink) {
+          fixedShrinkColumns.push({
+            column,
+            width: colWidth > minWidth ? colWidth : minWidth
+          });
+          flexShrinkUnits += column.definition.widthShrink;
+        }
+      } else {
+        flexColumns.push({
+          column,
+          width: 0
+        });
+        flexGrowUnits += column.definition.widthGrow || 1;
+      }
+    }
+  });
+  flexWidth = totalWidth - fixedWidth;
+  flexColWidth = Math.floor(flexWidth / flexGrowUnits);
+  gapFill = scaleColumns(flexColumns, flexWidth, flexColWidth, false);
+  if (flexColumns.length && gapFill > 0) {
+    flexColumns[flexColumns.length - 1].width += gapFill;
+  }
+  flexColumns.forEach(function(col) {
+    flexWidth -= col.width;
+  });
+  overflowWidth = Math.abs(gapFill) + flexWidth;
+  if (overflowWidth > 0 && flexShrinkUnits) {
+    gapFill = scaleColumns(fixedShrinkColumns, overflowWidth, Math.floor(overflowWidth / flexShrinkUnits), true);
+  }
+  if (gapFill && fixedShrinkColumns.length) {
+    fixedShrinkColumns[fixedShrinkColumns.length - 1].width -= gapFill;
+  }
+  flexColumns.forEach(function(col) {
+    col.column.setWidth(col.width);
+  });
+  fixedShrinkColumns.forEach(function(col) {
+    col.column.setWidth(col.width);
+  });
+}
+
+var defaultModes = {
+  fitData,
+  fitDataFill: fitDataGeneral,
+  fitDataTable: fitDataGeneral,
+  fitDataStretch,
+  fitColumns
+};
+
+class Layout extends Module {
+  constructor(table) {
+    super(table, "layout");
+    this.mode = null;
+    this.registerTableOption("layout", "fitData");
+    this.registerTableOption("layoutColumnsOnNewData", false);
+    this.registerColumnOption("widthGrow");
+    this.registerColumnOption("widthShrink");
+  }
+  initialize() {
+    var layout = this.table.options.layout;
+    if (Layout.modes[layout]) {
+      this.mode = layout;
+    } else {
+      console.warn("Layout Error - invalid mode set, defaulting to 'fitData' : " + layout);
+      this.mode = "fitData";
+    }
+    this.table.element.setAttribute("tabulator-layout", this.mode);
+  }
+  getMode() {
+    return this.mode;
+  }
+  layout(dataChanged) {
+    this.dispatch("layout-refreshing");
+    Layout.modes[this.mode].call(this, this.table.columnManager.columnsByIndex, dataChanged);
+    this.dispatch("layout-refreshed");
+  }
+}
+Layout.moduleName = "layout";
+Layout.modes = defaultModes;
+
+var defaultLangs = {
+  "default": {
+    "groups": {
+      "item": "item",
+      "items": "items"
+    },
+    "columns": {},
+    "data": {
+      "loading": "Loading",
+      "error": "Error"
+    },
+    "pagination": {
+      "page_size": "Page Size",
+      "page_title": "Show Page",
+      "first": "First",
+      "first_title": "First Page",
+      "last": "Last",
+      "last_title": "Last Page",
+      "prev": "Prev",
+      "prev_title": "Prev Page",
+      "next": "Next",
+      "next_title": "Next Page",
+      "all": "All",
+      "counter": {
+        "showing": "Showing",
+        "of": "of",
+        "rows": "rows",
+        "pages": "pages"
+      }
+    },
+    "headerFilters": {
+      "default": "filter column...",
+      "columns": {}
+    }
+  }
+};
+
+class Localize extends Module {
+  constructor(table) {
+    super(table);
+    this.locale = "default";
+    this.lang = false;
+    this.bindings = {};
+    this.langList = {};
+    this.registerTableOption("locale", false);
+    this.registerTableOption("langs", {});
+  }
+  initialize() {
+    this.langList = Helpers.deepClone(Localize.langs);
+    if (this.table.options.columnDefaults.headerFilterPlaceholder !== false) {
+      this.setHeaderFilterPlaceholder(this.table.options.columnDefaults.headerFilterPlaceholder);
+    }
+    for (let locale in this.table.options.langs) {
+      this.installLang(locale, this.table.options.langs[locale]);
+    }
+    this.setLocale(this.table.options.locale);
+    this.registerTableFunction("setLocale", this.setLocale.bind(this));
+    this.registerTableFunction("getLocale", this.getLocale.bind(this));
+    this.registerTableFunction("getLang", this.getLang.bind(this));
+  }
+  setHeaderFilterPlaceholder(placeholder) {
+    this.langList.default.headerFilters.default = placeholder;
+  }
+  setHeaderFilterColumnPlaceholder(column, placeholder) {
+    this.langList.default.headerFilters.columns[column] = placeholder;
+    if (this.lang && !this.lang.headerFilters.columns[column]) {
+      this.lang.headerFilters.columns[column] = placeholder;
+    }
+  }
+  installLang(locale, lang) {
+    if (this.langList[locale]) {
+      this._setLangProp(this.langList[locale], lang);
+    } else {
+      this.langList[locale] = lang;
+    }
+  }
+  _setLangProp(lang, values) {
+    for (let key in values) {
+      if (lang[key] && typeof lang[key] == "object") {
+        this._setLangProp(lang[key], values[key]);
+      } else {
+        lang[key] = values[key];
+      }
+    }
+  }
+  setLocale(desiredLocale) {
+    desiredLocale = desiredLocale || "default";
+    function traverseLang(trans, path) {
+      for (var prop in trans) {
+        if (typeof trans[prop] == "object") {
+          if (!path[prop]) {
+            path[prop] = {};
+          }
+          traverseLang(trans[prop], path[prop]);
+        } else {
+          path[prop] = trans[prop];
+        }
+      }
+    }
+    if (desiredLocale === true && navigator.language) {
+      desiredLocale = navigator.language.toLowerCase();
+    }
+    if (desiredLocale) {
+      if (!this.langList[desiredLocale]) {
+        let prefix = desiredLocale.split("-")[0];
+        if (this.langList[prefix]) {
+          console.warn("Localization Error - Exact matching locale not found, using closest match: ", desiredLocale, prefix);
+          desiredLocale = prefix;
+        } else {
+          console.warn("Localization Error - Matching locale not found, using default: ", desiredLocale);
+          desiredLocale = "default";
+        }
+      }
+    }
+    this.locale = desiredLocale;
+    this.lang = Helpers.deepClone(this.langList.default || {});
+    if (desiredLocale != "default") {
+      traverseLang(this.langList[desiredLocale], this.lang);
+    }
+    this.dispatchExternal("localized", this.locale, this.lang);
+    this._executeBindings();
+  }
+  getLocale(locale) {
+    return this.locale;
+  }
+  getLang(locale) {
+    return locale ? this.langList[locale] : this.lang;
+  }
+  getText(path, value) {
+    var fillPath = value ? path + "|" + value : path, pathArray = fillPath.split("|"), text = this._getLangElement(pathArray, this.locale);
+    return text || "";
+  }
+  _getLangElement(path, locale) {
+    var root = this.lang;
+    path.forEach(function(level) {
+      var rootPath;
+      if (root) {
+        rootPath = root[level];
+        if (typeof rootPath != "undefined") {
+          root = rootPath;
+        } else {
+          root = false;
+        }
+      }
+    });
+    return root;
+  }
+  bind(path, callback) {
+    if (!this.bindings[path]) {
+      this.bindings[path] = [];
+    }
+    this.bindings[path].push(callback);
+    callback(this.getText(path), this.lang);
+  }
+  _executeBindings() {
+    for (let path in this.bindings) {
+      this.bindings[path].forEach((binding) => {
+        binding(this.getText(path), this.lang);
+      });
+    }
+  }
+}
+Localize.moduleName = "localize";
+Localize.langs = defaultLangs;
+
+class Comms extends Module {
+  constructor(table) {
+    super(table);
+  }
+  initialize() {
+    this.registerTableFunction("tableComms", this.receive.bind(this));
+  }
+  getConnections(selectors) {
+    var connections = [], connection;
+    connection = TableRegistry.lookupTable(selectors);
+    connection.forEach((con) => {
+      if (this.table !== con) {
+        connections.push(con);
+      }
+    });
+    return connections;
+  }
+  send(selectors, module, action, data) {
+    var connections = this.getConnections(selectors);
+    connections.forEach((connection) => {
+      connection.tableComms(this.table.element, module, action, data);
+    });
+    if (!connections.length && selectors) {
+      console.warn("Table Connection Error - No tables matching selector found", selectors);
+    }
+  }
+  receive(table, module, action, data) {
+    if (this.table.modExists(module)) {
+      return this.table.modules[module].commsReceived(table, action, data);
+    } else {
+      console.warn("Inter-table Comms Error - no such module:", module);
+    }
+  }
+}
+Comms.moduleName = "comms";
+
+var coreModules = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  LayoutModule: Layout,
+  LocalizeModule: Localize,
+  CommsModule: Comms
+});
+
+var defaultPasteActions = {
+  replace: function(rows) {
+    return this.table.setData(rows);
+  },
+  update: function(rows) {
+    return this.table.updateOrAddData(rows);
+  },
+  insert: function(rows) {
+    return this.table.addData(rows);
+  }
+};
+
+var defaultPasteParsers = {
+  table: function(clipboard) {
+    var data = [], headerFindSuccess = true, columns = this.table.columnManager.columns, columnMap = [], rows = [];
+    clipboard = clipboard.split("\n");
+    clipboard.forEach(function(row) {
+      data.push(row.split("	"));
+    });
+    if (data.length && !(data.length === 1 && data[0].length < 2)) {
+      data[0].forEach(function(value) {
+        var column = columns.find(function(column2) {
+          return value && column2.definition.title && value.trim() && column2.definition.title.trim() === value.trim();
+        });
+        if (column) {
+          columnMap.push(column);
+        } else {
+          headerFindSuccess = false;
+        }
+      });
+      if (!headerFindSuccess) {
+        headerFindSuccess = true;
+        columnMap = [];
+        data[0].forEach(function(value) {
+          var column = columns.find(function(column2) {
+            return value && column2.field && value.trim() && column2.field.trim() === value.trim();
+          });
+          if (column) {
+            columnMap.push(column);
+          } else {
+            headerFindSuccess = false;
+          }
+        });
+        if (!headerFindSuccess) {
+          columnMap = this.table.columnManager.columnsByIndex;
+        }
+      }
+      if (headerFindSuccess) {
+        data.shift();
+      }
+      data.forEach(function(item) {
+        var row = {};
+        item.forEach(function(value, i) {
+          if (columnMap[i]) {
+            row[columnMap[i].field] = value;
+          }
+        });
+        rows.push(row);
+      });
+      return rows;
+    } else {
+      return false;
+    }
+  }
+};
+
+class Clipboard extends Module {
+  constructor(table) {
+    super(table);
+    this.mode = true;
+    this.pasteParser = function() {
+    };
+    this.pasteAction = function() {
+    };
+    this.customSelection = false;
+    this.rowRange = false;
+    this.blocked = true;
+    this.registerTableOption("clipboard", false);
+    this.registerTableOption("clipboardCopyStyled", true);
+    this.registerTableOption("clipboardCopyConfig", false);
+    this.registerTableOption("clipboardCopyFormatter", false);
+    this.registerTableOption("clipboardCopyRowRange", "active");
+    this.registerTableOption("clipboardPasteParser", "table");
+    this.registerTableOption("clipboardPasteAction", "insert");
+    this.registerColumnOption("clipboard");
+    this.registerColumnOption("titleClipboard");
+  }
+  initialize() {
+    this.mode = this.table.options.clipboard;
+    this.rowRange = this.table.options.clipboardCopyRowRange;
+    if (this.mode === true || this.mode === "copy") {
+      this.table.element.addEventListener("copy", (e) => {
+        var plain, html, list;
+        if (!this.blocked) {
+          e.preventDefault();
+          if (this.customSelection) {
+            plain = this.customSelection;
+            if (this.table.options.clipboardCopyFormatter) {
+              plain = this.table.options.clipboardCopyFormatter("plain", plain);
+            }
+          } else {
+            list = this.table.modules.export.generateExportList(this.table.options.clipboardCopyConfig, this.table.options.clipboardCopyStyled, this.rowRange, "clipboard");
+            html = this.table.modules.export.generateHTMLTable(list);
+            plain = html ? this.generatePlainContent(list) : "";
+            if (this.table.options.clipboardCopyFormatter) {
+              plain = this.table.options.clipboardCopyFormatter("plain", plain);
+              html = this.table.options.clipboardCopyFormatter("html", html);
+            }
+          }
+          if (window.clipboardData && window.clipboardData.setData) {
+            window.clipboardData.setData("Text", plain);
+          } else if (e.clipboardData && e.clipboardData.setData) {
+            e.clipboardData.setData("text/plain", plain);
+            if (html) {
+              e.clipboardData.setData("text/html", html);
+            }
+          } else if (e.originalEvent && e.originalEvent.clipboardData.setData) {
+            e.originalEvent.clipboardData.setData("text/plain", plain);
+            if (html) {
+              e.originalEvent.clipboardData.setData("text/html", html);
+            }
+          }
+          this.dispatchExternal("clipboardCopied", plain, html);
+          this.reset();
+        }
+      });
+    }
+    if (this.mode === true || this.mode === "paste") {
+      this.table.element.addEventListener("paste", (e) => {
+        this.paste(e);
+      });
+    }
+    this.setPasteParser(this.table.options.clipboardPasteParser);
+    this.setPasteAction(this.table.options.clipboardPasteAction);
+    this.registerTableFunction("copyToClipboard", this.copy.bind(this));
+  }
+  reset() {
+    this.blocked = true;
+    this.customSelection = false;
+  }
+  generatePlainContent(list) {
+    var output = [];
+    list.forEach((row) => {
+      var rowData = [];
+      row.columns.forEach((col) => {
+        var value = "";
+        if (col) {
+          if (row.type === "group") {
+            col.value = col.component.getKey();
+          }
+          if (col.value === null) {
+            value = "";
+          } else {
+            switch (typeof col.value) {
+              case "object":
+                value = JSON.stringify(col.value);
+                break;
+              case "undefined":
+                value = "";
+                break;
+              default:
+                value = col.value;
+            }
+          }
+        }
+        rowData.push(value);
+      });
+      output.push(rowData.join("	"));
+    });
+    return output.join("\n");
+  }
+  copy(range, internal) {
+    var sel, textRange;
+    this.blocked = false;
+    this.customSelection = false;
+    if (this.mode === true || this.mode === "copy") {
+      this.rowRange = range || this.table.options.clipboardCopyRowRange;
+      if (typeof window.getSelection != "undefined" && typeof document.createRange != "undefined") {
+        range = document.createRange();
+        range.selectNodeContents(this.table.element);
+        sel = window.getSelection();
+        if (sel.toString() && internal) {
+          this.customSelection = sel.toString();
+        }
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } else if (typeof document.selection != "undefined" && typeof document.body.createTextRange != "undefined") {
+        textRange = document.body.createTextRange();
+        textRange.moveToElementText(this.table.element);
+        textRange.select();
+      }
+      document.execCommand("copy");
+      if (sel) {
+        sel.removeAllRanges();
+      }
+    }
+  }
+  setPasteAction(action) {
+    switch (typeof action) {
+      case "string":
+        this.pasteAction = Clipboard.pasteActions[action];
+        if (!this.pasteAction) {
+          console.warn("Clipboard Error - No such paste action found:", action);
+        }
+        break;
+      case "function":
+        this.pasteAction = action;
+        break;
+    }
+  }
+  setPasteParser(parser) {
+    switch (typeof parser) {
+      case "string":
+        this.pasteParser = Clipboard.pasteParsers[parser];
+        if (!this.pasteParser) {
+          console.warn("Clipboard Error - No such paste parser found:", parser);
+        }
+        break;
+      case "function":
+        this.pasteParser = parser;
+        break;
+    }
+  }
+  paste(e) {
+    var data, rowData, rows;
+    if (this.checkPaseOrigin(e)) {
+      data = this.getPasteData(e);
+      rowData = this.pasteParser.call(this, data);
+      if (rowData) {
+        e.preventDefault();
+        if (this.table.modExists("mutator")) {
+          rowData = this.mutateData(rowData);
+        }
+        rows = this.pasteAction.call(this, rowData);
+        this.dispatchExternal("clipboardPasted", data, rowData, rows);
+      } else {
+        this.dispatchExternal("clipboardPasteError", data);
+      }
+    }
+  }
+  mutateData(data) {
+    var output = [];
+    if (Array.isArray(data)) {
+      data.forEach((row) => {
+        output.push(this.table.modules.mutator.transformRow(row, "clipboard"));
+      });
+    } else {
+      output = data;
+    }
+    return output;
+  }
+  checkPaseOrigin(e) {
+    var valid = true;
+    if (e.target.tagName != "DIV" || this.table.modules.edit.currentCell) {
+      valid = false;
+    }
+    return valid;
+  }
+  getPasteData(e) {
+    var data;
+    if (window.clipboardData && window.clipboardData.getData) {
+      data = window.clipboardData.getData("Text");
+    } else if (e.clipboardData && e.clipboardData.getData) {
+      data = e.clipboardData.getData("text/plain");
+    } else if (e.originalEvent && e.originalEvent.clipboardData.getData) {
+      data = e.originalEvent.clipboardData.getData("text/plain");
+    }
+    return data;
+  }
+}
+Clipboard.moduleName = "clipboard";
+Clipboard.pasteActions = defaultPasteActions;
+Clipboard.pasteParsers = defaultPasteParsers;
 
 function maskInput(el, options) {
   var mask = options.mask, maskLetter = typeof options.maskLetterChar !== "undefined" ? options.maskLetterChar : "A", maskNumber = typeof options.maskNumberChar !== "undefined" ? options.maskNumberChar : "9", maskWildcard = typeof options.maskWildcardChar !== "undefined" ? options.maskWildcardChar : "*";
@@ -6592,626 +9396,6 @@ class FrozenColumns extends Module {
 }
 FrozenColumns.moduleName = "frozenColumns";
 
-var defaultUndoers = {
-  cellEdit: function(action) {
-    action.component.setValueProcessData(action.data.oldValue);
-    action.component.cellRendered();
-  },
-  rowAdd: function(action) {
-    action.component.deleteActual();
-  },
-  rowDelete: function(action) {
-    var newRow = this.table.rowManager.addRowActual(action.data.data, action.data.pos, action.data.index);
-    if (this.table.options.groupBy && this.table.modExists("groupRows")) {
-      this.table.modules.groupRows.updateGroupRows(true);
-    }
-    this._rebindRow(action.component, newRow);
-  },
-  rowMove: function(action) {
-    this.table.rowManager.moveRowActual(action.component, this.table.rowManager.rows[action.data.posFrom], !action.data.after);
-    this.table.rowManager.redraw();
-  }
-};
-
-var defaultRedoers = {
-  cellEdit: function(action) {
-    action.component.setValueProcessData(action.data.newValue);
-    action.component.cellRendered();
-  },
-  rowAdd: function(action) {
-    var newRow = this.table.rowManager.addRowActual(action.data.data, action.data.pos, action.data.index);
-    if (this.table.options.groupBy && this.table.modExists("groupRows")) {
-      this.table.modules.groupRows.updateGroupRows(true);
-    }
-    this._rebindRow(action.component, newRow);
-  },
-  rowDelete: function(action) {
-    action.component.deleteActual();
-  },
-  rowMove: function(action) {
-    this.table.rowManager.moveRowActual(action.component, this.table.rowManager.rows[action.data.posTo], action.data.after);
-    this.table.rowManager.redraw();
-  }
-};
-
-class History extends Module {
-  constructor(table) {
-    super(table);
-    this.history = [];
-    this.index = -1;
-    this.registerTableOption("history", false);
-  }
-  initialize() {
-    if (this.table.options.history) {
-      this.subscribe("cell-value-updated", this.cellUpdated.bind(this));
-      this.subscribe("cell-delete", this.clearComponentHistory.bind(this));
-      this.subscribe("row-delete", this.rowDeleted.bind(this));
-      this.subscribe("rows-wipe", this.clear.bind(this));
-      this.subscribe("row-added", this.rowAdded.bind(this));
-      this.subscribe("row-move", this.rowMoved.bind(this));
-    }
-    this.registerTableFunction("undo", this.undo.bind(this));
-    this.registerTableFunction("redo", this.redo.bind(this));
-    this.registerTableFunction("getHistoryUndoSize", this.getHistoryUndoSize.bind(this));
-    this.registerTableFunction("getHistoryRedoSize", this.getHistoryRedoSize.bind(this));
-    this.registerTableFunction("clearHistory", this.clear.bind(this));
-  }
-  rowMoved(from, to, after) {
-    this.action("rowMove", from, { posFrom: from.getPosition(), posTo: to.getPosition(), to, after });
-  }
-  rowAdded(row, data, pos, index) {
-    this.action("rowAdd", row, { data, pos, index });
-  }
-  rowDeleted(row) {
-    var index, rows;
-    if (this.table.options.groupBy) {
-      rows = row.getComponent().getGroup()._getSelf().rows;
-      index = rows.indexOf(row);
-      if (index) {
-        index = rows[index - 1];
-      }
-    } else {
-      index = row.table.rowManager.getRowIndex(row);
-      if (index) {
-        index = row.table.rowManager.rows[index - 1];
-      }
-    }
-    this.action("rowDelete", row, { data: row.getData(), pos: !index, index });
-  }
-  cellUpdated(cell) {
-    this.action("cellEdit", cell, { oldValue: cell.oldValue, newValue: cell.value });
-  }
-  clear() {
-    this.history = [];
-    this.index = -1;
-  }
-  action(type, component, data) {
-    this.history = this.history.slice(0, this.index + 1);
-    this.history.push({
-      type,
-      component,
-      data
-    });
-    this.index++;
-  }
-  getHistoryUndoSize() {
-    return this.index + 1;
-  }
-  getHistoryRedoSize() {
-    return this.history.length - (this.index + 1);
-  }
-  clearComponentHistory(component) {
-    var index = this.history.findIndex(function(item) {
-      return item.component === component;
-    });
-    if (index > -1) {
-      this.history.splice(index, 1);
-      if (index <= this.index) {
-        this.index--;
-      }
-      this.clearComponentHistory(component);
-    }
-  }
-  undo() {
-    if (this.index > -1) {
-      let action = this.history[this.index];
-      History.undoers[action.type].call(this, action);
-      this.index--;
-      this.dispatchExternal("historyUndo", action.type, action.component.getComponent(), action.data);
-      return true;
-    } else {
-      console.warn("History Undo Error - No more history to undo");
-      return false;
-    }
-  }
-  redo() {
-    if (this.history.length - 1 > this.index) {
-      this.index++;
-      let action = this.history[this.index];
-      History.redoers[action.type].call(this, action);
-      this.dispatchExternal("historyRedo", action.type, action.component.getComponent(), action.data);
-      return true;
-    } else {
-      console.warn("History Redo Error - No more history to redo");
-      return false;
-    }
-  }
-  _rebindRow(oldRow, newRow) {
-    this.history.forEach(function(action) {
-      if (action.component instanceof Row) {
-        if (action.component === oldRow) {
-          action.component = newRow;
-        }
-      } else if (action.component instanceof Cell) {
-        if (action.component.row === oldRow) {
-          var field = action.component.column.getField();
-          if (field) {
-            action.component = newRow.getCell(field);
-          }
-        }
-      }
-    });
-  }
-}
-History.moduleName = "history";
-History.undoers = defaultUndoers;
-History.redoers = defaultRedoers;
-
-function csvImporter(input) {
-  var data = [], row = 0, col = 0, inQuote = false;
-  for (let index = 0; index < input.length; index++) {
-    let char = input[index], nextChar = input[index + 1];
-    if (!data[row]) {
-      data[row] = [];
-    }
-    if (!data[row][col]) {
-      data[row][col] = "";
-    }
-    if (char == '"' && inQuote && nextChar == '"') {
-      data[row][col] += char;
-      index++;
-      continue;
-    }
-    if (char == '"') {
-      inQuote = !inQuote;
-      continue;
-    }
-    if (char == "," && !inQuote) {
-      col++;
-      continue;
-    }
-    if (char == "\r" && nextChar == "\n" && !inQuote) {
-      col = 0;
-      row++;
-      index++;
-      continue;
-    }
-    if ((char == "\r" || char == "\n") && !inQuote) {
-      col = 0;
-      row++;
-      continue;
-    }
-    data[row][col] += char;
-  }
-  return data;
-}
-
-function json(input) {
-  try {
-    return JSON.parse(input);
-  } catch (e) {
-    console.warn("JSON Import Error - File contents is invalid JSON", e);
-    return Promise.reject();
-  }
-}
-
-function arrayImporter(input) {
-  return input;
-}
-
-var defaultImporters = {
-  csv: csvImporter,
-  json,
-  array: arrayImporter
-};
-
-class Import extends Module {
-  constructor(table) {
-    super(table);
-    this.registerTableOption("importFormat");
-    this.registerTableOption("importReader", "text");
-  }
-  initialize() {
-    this.registerTableFunction("import", this.importFromFile.bind(this));
-    if (this.table.options.importFormat) {
-      this.subscribe("data-loading", this.loadDataCheck.bind(this), 10);
-      this.subscribe("data-load", this.loadData.bind(this), 10);
-    }
-  }
-  loadDataCheck(data) {
-    return this.table.options.importFormat && (typeof data === "string" || Array.isArray(data) && data.length && Array.isArray(data));
-  }
-  loadData(data, params, config, silent, previousData) {
-    return this.importData(this.lookupImporter(), data).then(this.structureData.bind(this)).catch((err) => {
-      console.error("Import Error:", err || "Unable to import data");
-      return Promise.reject(err);
-    });
-  }
-  lookupImporter(importFormat) {
-    var importer;
-    if (!importFormat) {
-      importFormat = this.table.options.importFormat;
-    }
-    if (typeof importFormat === "string") {
-      importer = Import.importers[importFormat];
-    } else {
-      importer = importFormat;
-    }
-    if (!importer) {
-      console.error("Import Error - Importer not found:", importFormat);
-    }
-    return importer;
-  }
-  importFromFile(importFormat, extension) {
-    var importer = this.lookupImporter(importFormat);
-    if (importer) {
-      return this.pickFile(extension).then(this.importData.bind(this, importer)).then(this.structureData.bind(this)).then(this.setData.bind(this)).catch((err) => {
-        console.error("Import Error:", err || "Unable to import file");
-        return Promise.reject(err);
-      });
-    }
-  }
-  pickFile(extensions) {
-    return new Promise((resolve, reject) => {
-      var input = document.createElement("input");
-      input.type = "file";
-      input.accept = extensions;
-      input.addEventListener("change", (e) => {
-        var file = input.files[0], reader = new FileReader();
-        switch (this.table.options.importReader) {
-          case "buffer":
-            reader.readAsArrayBuffer(file);
-            break;
-          case "binary":
-            reader.readAsBinaryString(file);
-            break;
-          case "url":
-            reader.readAsDataURL(file);
-            break;
-          case "text":
-          default:
-            reader.readAsText(file);
-        }
-        reader.onload = (e2) => {
-          resolve(reader.result);
-        };
-        reader.onerror = (e2) => {
-          console.warn("File Load Error - Unable to read file");
-          reject();
-        };
-      });
-      input.click();
-    });
-  }
-  importData(importer, fileContents) {
-    var data = importer.call(this.table, fileContents);
-    if (data instanceof Promise) {
-      return data;
-    } else {
-      return data ? Promise.resolve(data) : Promise.reject();
-    }
-  }
-  structureData(parsedData) {
-    var data = [];
-    if (Array.isArray(parsedData) && parsedData.length && Array.isArray(parsedData[0])) {
-      if (this.table.options.autoColumns) {
-        data = this.structureArrayToObject(parsedData);
-      } else {
-        data = this.structureArrayToColumns(parsedData);
-      }
-      return data;
-    } else {
-      return parsedData;
-    }
-  }
-  structureArrayToObject(parsedData) {
-    var columns = parsedData.shift();
-    var data = parsedData.map((values) => {
-      var row = {};
-      columns.forEach((key, i) => {
-        row[key] = values[i];
-      });
-      return row;
-    });
-    return data;
-  }
-  structureArrayToColumns(parsedData) {
-    var data = [], columns = this.table.getColumns();
-    if (columns[0] && parsedData[0][0]) {
-      if (columns[0].getDefinition().title === parsedData[0][0]) {
-        parsedData.shift();
-      }
-    }
-    parsedData.forEach((rowData) => {
-      var row = {};
-      rowData.forEach((value, index) => {
-        var column = columns[index];
-        if (column) {
-          row[column.getField()] = value;
-        }
-      });
-      data.push(row);
-    });
-    return data;
-  }
-  setData(data) {
-    return this.table.setData(data);
-  }
-}
-Import.moduleName = "import";
-Import.importers = defaultImporters;
-
-class Interaction extends Module {
-  constructor(table) {
-    super(table);
-    this.eventMap = {
-      rowClick: "row-click",
-      rowDblClick: "row-dblclick",
-      rowContext: "row-contextmenu",
-      rowMouseEnter: "row-mouseenter",
-      rowMouseLeave: "row-mouseleave",
-      rowMouseOver: "row-mouseover",
-      rowMouseOut: "row-mouseout",
-      rowMouseMove: "row-mousemove",
-      rowMouseDown: "row-mousedown",
-      rowMouseUp: "row-mouseup",
-      rowTap: "row",
-      rowDblTap: "row",
-      rowTapHold: "row",
-      cellClick: "cell-click",
-      cellDblClick: "cell-dblclick",
-      cellContext: "cell-contextmenu",
-      cellMouseEnter: "cell-mouseenter",
-      cellMouseLeave: "cell-mouseleave",
-      cellMouseOver: "cell-mouseover",
-      cellMouseOut: "cell-mouseout",
-      cellMouseMove: "cell-mousemove",
-      cellMouseDown: "cell-mousedown",
-      cellMouseUp: "cell-mouseup",
-      cellTap: "cell",
-      cellDblTap: "cell",
-      cellTapHold: "cell",
-      headerClick: "column-click",
-      headerDblClick: "column-dblclick",
-      headerContext: "column-contextmenu",
-      headerMouseEnter: "column-mouseenter",
-      headerMouseLeave: "column-mouseleave",
-      headerMouseOver: "column-mouseover",
-      headerMouseOut: "column-mouseout",
-      headerMouseMove: "column-mousemove",
-      headerMouseDown: "column-mousedown",
-      headerMouseUp: "column-mouseup",
-      headerTap: "column",
-      headerDblTap: "column",
-      headerTapHold: "column",
-      groupClick: "group-click",
-      groupDblClick: "group-dblclick",
-      groupContext: "group-contextmenu",
-      groupMouseEnter: "group-mouseenter",
-      groupMouseLeave: "group-mouseleave",
-      groupMouseOver: "group-mouseover",
-      groupMouseOut: "group-mouseout",
-      groupMouseMove: "group-mousemove",
-      groupMouseDown: "group-mousedown",
-      groupMouseUp: "group-mouseup",
-      groupTap: "group",
-      groupDblTap: "group",
-      groupTapHold: "group"
-    };
-    this.subscribers = {};
-    this.touchSubscribers = {};
-    this.columnSubscribers = {};
-    this.touchWatchers = {
-      row: {
-        tap: null,
-        tapDbl: null,
-        tapHold: null
-      },
-      cell: {
-        tap: null,
-        tapDbl: null,
-        tapHold: null
-      },
-      column: {
-        tap: null,
-        tapDbl: null,
-        tapHold: null
-      },
-      group: {
-        tap: null,
-        tapDbl: null,
-        tapHold: null
-      }
-    };
-    this.registerColumnOption("headerClick");
-    this.registerColumnOption("headerDblClick");
-    this.registerColumnOption("headerContext");
-    this.registerColumnOption("headerMouseEnter");
-    this.registerColumnOption("headerMouseLeave");
-    this.registerColumnOption("headerMouseOver");
-    this.registerColumnOption("headerMouseOut");
-    this.registerColumnOption("headerMouseMove");
-    this.registerColumnOption("headerMouseDown");
-    this.registerColumnOption("headerMouseUp");
-    this.registerColumnOption("headerTap");
-    this.registerColumnOption("headerDblTap");
-    this.registerColumnOption("headerTapHold");
-    this.registerColumnOption("cellClick");
-    this.registerColumnOption("cellDblClick");
-    this.registerColumnOption("cellContext");
-    this.registerColumnOption("cellMouseEnter");
-    this.registerColumnOption("cellMouseLeave");
-    this.registerColumnOption("cellMouseOver");
-    this.registerColumnOption("cellMouseOut");
-    this.registerColumnOption("cellMouseMove");
-    this.registerColumnOption("cellMouseDown");
-    this.registerColumnOption("cellMouseUp");
-    this.registerColumnOption("cellTap");
-    this.registerColumnOption("cellDblTap");
-    this.registerColumnOption("cellTapHold");
-  }
-  initialize() {
-    this.initializeExternalEvents();
-    this.subscribe("column-init", this.initializeColumn.bind(this));
-    this.subscribe("cell-dblclick", this.cellContentsSelectionFixer.bind(this));
-  }
-  cellContentsSelectionFixer(e, cell) {
-    var range;
-    if (this.table.modExists("edit")) {
-      if (this.table.modules.edit.currentCell === cell) {
-        return;
-      }
-    }
-    e.preventDefault();
-    try {
-      if (document.selection) {
-        range = document.body.createTextRange();
-        range.moveToElementText(cell.getElement());
-        range.select();
-      } else if (window.getSelection) {
-        range = document.createRange();
-        range.selectNode(cell.getElement());
-        window.getSelection().removeAllRanges();
-        window.getSelection().addRange(range);
-      }
-    } catch (e2) {
-    }
-  }
-  initializeExternalEvents() {
-    for (let key in this.eventMap) {
-      this.subscriptionChangeExternal(key, this.subscriptionChanged.bind(this, key));
-    }
-  }
-  subscriptionChanged(key, added) {
-    if (added) {
-      if (!this.subscribers[key]) {
-        if (this.eventMap[key].includes("-")) {
-          this.subscribers[key] = this.handle.bind(this, key);
-          this.subscribe(this.eventMap[key], this.subscribers[key]);
-        } else {
-          this.subscribeTouchEvents(key);
-        }
-      }
-    } else {
-      if (this.eventMap[key].includes("-")) {
-        if (this.subscribers[key] && !this.columnSubscribers[key] && !this.subscribedExternal(key)) {
-          this.unsubscribe(this.eventMap[key], this.subscribers[key]);
-          delete this.subscribers[key];
-        }
-      } else {
-        this.unsubscribeTouchEvents(key);
-      }
-    }
-  }
-  subscribeTouchEvents(key) {
-    var type = this.eventMap[key];
-    if (!this.touchSubscribers[type + "-touchstart"]) {
-      this.touchSubscribers[type + "-touchstart"] = this.handleTouch.bind(this, type, "start");
-      this.touchSubscribers[type + "-touchend"] = this.handleTouch.bind(this, type, "end");
-      this.subscribe(type + "-touchstart", this.touchSubscribers[type + "-touchstart"]);
-      this.subscribe(type + "-touchend", this.touchSubscribers[type + "-touchend"]);
-    }
-    this.subscribers[key] = true;
-  }
-  unsubscribeTouchEvents(key) {
-    var noTouch = true, type = this.eventMap[key];
-    if (this.subscribers[key] && !this.subscribedExternal(key)) {
-      delete this.subscribers[key];
-      for (let i in this.eventMap) {
-        if (this.eventMap[i] === type) {
-          if (this.subscribers[i]) {
-            noTouch = false;
-          }
-        }
-      }
-      if (noTouch) {
-        this.unsubscribe(type + "-touchstart", this.touchSubscribers[type + "-touchstart"]);
-        this.unsubscribe(type + "-touchend", this.touchSubscribers[type + "-touchend"]);
-        delete this.touchSubscribers[type + "-touchstart"];
-        delete this.touchSubscribers[type + "-touchend"];
-      }
-    }
-  }
-  initializeColumn(column) {
-    var def = column.definition;
-    for (let key in this.eventMap) {
-      if (def[key]) {
-        this.subscriptionChanged(key, true);
-        if (!this.columnSubscribers[key]) {
-          this.columnSubscribers[key] = [];
-        }
-        this.columnSubscribers[key].push(column);
-      }
-    }
-  }
-  handle(action, e, component) {
-    this.dispatchEvent(action, e, component);
-  }
-  handleTouch(type, action, e, component) {
-    var watchers = this.touchWatchers[type];
-    if (type === "column") {
-      type = "header";
-    }
-    switch (action) {
-      case "start":
-        watchers.tap = true;
-        clearTimeout(watchers.tapHold);
-        watchers.tapHold = setTimeout(() => {
-          clearTimeout(watchers.tapHold);
-          watchers.tapHold = null;
-          watchers.tap = null;
-          clearTimeout(watchers.tapDbl);
-          watchers.tapDbl = null;
-          this.dispatchEvent(type + "TapHold", e, component);
-        }, 1e3);
-        break;
-      case "end":
-        if (watchers.tap) {
-          watchers.tap = null;
-          this.dispatchEvent(type + "Tap", e, component);
-        }
-        if (watchers.tapDbl) {
-          clearTimeout(watchers.tapDbl);
-          watchers.tapDbl = null;
-          this.dispatchEvent(type + "DblTap", e, component);
-        } else {
-          watchers.tapDbl = setTimeout(() => {
-            clearTimeout(watchers.tapDbl);
-            watchers.tapDbl = null;
-          }, 300);
-        }
-        clearTimeout(watchers.tapHold);
-        watchers.tapHold = null;
-        break;
-    }
-  }
-  dispatchEvent(action, e, component) {
-    var componentObj = component.getComponent(), callback;
-    if (this.columnSubscribers[action]) {
-      if (component instanceof Cell) {
-        callback = component.column.definition[action];
-      } else if (component instanceof Column) {
-        callback = component.definition[action];
-      }
-      if (callback) {
-        callback(e, componentObj);
-      }
-    }
-    this.dispatchExternal(action, e, componentObj);
-  }
-}
-Interaction.moduleName = "interaction";
-
 var defaultBindings = {
   navPrev: "shift + 9",
   navNext: 9,
@@ -7443,234 +9627,6 @@ Keybindings.moduleName = "keybindings";
 Keybindings.bindings = defaultBindings;
 Keybindings.actions = defaultActions;
 
-class Menu extends Module {
-  constructor(table) {
-    super(table);
-    this.menuContainer = null;
-    this.nestedMenuBlock = false;
-    this.currentComponent = null;
-    this.rootPopup = null;
-    this.columnSubscribers = {};
-    this.registerTableOption("menuContainer", void 0);
-    this.registerTableOption("rowContextMenu", false);
-    this.registerTableOption("rowClickMenu", false);
-    this.registerTableOption("rowDblClickMenu", false);
-    this.registerTableOption("groupContextMenu", false);
-    this.registerTableOption("groupClickMenu", false);
-    this.registerTableOption("groupDblClickMenu", false);
-    this.registerColumnOption("headerContextMenu");
-    this.registerColumnOption("headerClickMenu");
-    this.registerColumnOption("headerDblClickMenu");
-    this.registerColumnOption("headerMenu");
-    this.registerColumnOption("headerMenuIcon");
-    this.registerColumnOption("contextMenu");
-    this.registerColumnOption("clickMenu");
-    this.registerColumnOption("dblClickMenu");
-  }
-  initialize() {
-    this.deprecatedOptionsCheck();
-    this.initializeRowWatchers();
-    this.initializeGroupWatchers();
-    this.subscribe("column-init", this.initializeColumn.bind(this));
-  }
-  deprecatedOptionsCheck() {
-    if (!this.deprecationCheck("menuContainer", "popupContainer")) {
-      this.table.options.popupContainer = this.table.options.menuContainer;
-    }
-  }
-  initializeRowWatchers() {
-    if (this.table.options.rowContextMenu) {
-      this.subscribe("row-contextmenu", this.loadMenuEvent.bind(this, this.table.options.rowContextMenu));
-      this.table.on("rowTapHold", this.loadMenuEvent.bind(this, this.table.options.rowContextMenu));
-    }
-    if (this.table.options.rowClickMenu) {
-      this.subscribe("row-click", this.loadMenuEvent.bind(this, this.table.options.rowClickMenu));
-    }
-    if (this.table.options.rowDblClickMenu) {
-      this.subscribe("row-dblclick", this.loadMenuEvent.bind(this, this.table.options.rowDblClickMenu));
-    }
-  }
-  initializeGroupWatchers() {
-    if (this.table.options.groupContextMenu) {
-      this.subscribe("group-contextmenu", this.loadMenuEvent.bind(this, this.table.options.groupContextMenu));
-      this.table.on("groupTapHold", this.loadMenuEvent.bind(this, this.table.options.groupContextMenu));
-    }
-    if (this.table.options.groupClickMenu) {
-      this.subscribe("group-click", this.loadMenuEvent.bind(this, this.table.options.groupClickMenu));
-    }
-    if (this.table.options.groupDblClickMenu) {
-      this.subscribe("group-dblclick", this.loadMenuEvent.bind(this, this.table.options.groupDblClickMenu));
-    }
-  }
-  initializeColumn(column) {
-    var def = column.definition;
-    if (def.headerContextMenu && !this.columnSubscribers.headerContextMenu) {
-      this.columnSubscribers.headerContextMenu = this.loadMenuTableColumnEvent.bind(this, "headerContextMenu");
-      this.subscribe("column-contextmenu", this.columnSubscribers.headerContextMenu);
-      this.table.on("headerTapHold", this.loadMenuTableColumnEvent.bind(this, "headerContextMenu"));
-    }
-    if (def.headerClickMenu && !this.columnSubscribers.headerClickMenu) {
-      this.columnSubscribers.headerClickMenu = this.loadMenuTableColumnEvent.bind(this, "headerClickMenu");
-      this.subscribe("column-click", this.columnSubscribers.headerClickMenu);
-    }
-    if (def.headerDblClickMenu && !this.columnSubscribers.headerDblClickMenu) {
-      this.columnSubscribers.headerDblClickMenu = this.loadMenuTableColumnEvent.bind(this, "headerDblClickMenu");
-      this.subscribe("column-dblclick", this.columnSubscribers.headerDblClickMenu);
-    }
-    if (def.headerMenu) {
-      this.initializeColumnHeaderMenu(column);
-    }
-    if (def.contextMenu && !this.columnSubscribers.contextMenu) {
-      this.columnSubscribers.contextMenu = this.loadMenuTableCellEvent.bind(this, "contextMenu");
-      this.subscribe("cell-contextmenu", this.columnSubscribers.contextMenu);
-      this.table.on("cellTapHold", this.loadMenuTableCellEvent.bind(this, "contextMenu"));
-    }
-    if (def.clickMenu && !this.columnSubscribers.clickMenu) {
-      this.columnSubscribers.clickMenu = this.loadMenuTableCellEvent.bind(this, "clickMenu");
-      this.subscribe("cell-click", this.columnSubscribers.clickMenu);
-    }
-    if (def.dblClickMenu && !this.columnSubscribers.dblClickMenu) {
-      this.columnSubscribers.dblClickMenu = this.loadMenuTableCellEvent.bind(this, "dblClickMenu");
-      this.subscribe("cell-dblclick", this.columnSubscribers.dblClickMenu);
-    }
-  }
-  initializeColumnHeaderMenu(column) {
-    var icon = column.definition.headerMenuIcon, headerMenuEl;
-    headerMenuEl = document.createElement("span");
-    headerMenuEl.classList.add("tabulator-header-popup-button");
-    if (icon) {
-      if (typeof icon === "function") {
-        icon = icon(column.getComponent());
-      }
-      if (icon instanceof HTMLElement) {
-        headerMenuEl.appendChild(icon);
-      } else {
-        headerMenuEl.innerHTML = icon;
-      }
-    } else {
-      headerMenuEl.innerHTML = "&vellip;";
-    }
-    headerMenuEl.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      this.loadMenuEvent(column.definition.headerMenu, e, column);
-    });
-    column.titleElement.insertBefore(headerMenuEl, column.titleElement.firstChild);
-  }
-  loadMenuTableCellEvent(option, e, cell) {
-    if (cell._cell) {
-      cell = cell._cell;
-    }
-    if (cell.column.definition[option]) {
-      this.loadMenuEvent(cell.column.definition[option], e, cell);
-    }
-  }
-  loadMenuTableColumnEvent(option, e, column) {
-    if (column._column) {
-      column = column._column;
-    }
-    if (column.definition[option]) {
-      this.loadMenuEvent(column.definition[option], e, column);
-    }
-  }
-  loadMenuEvent(menu, e, component) {
-    if (component._group) {
-      component = component._group;
-    } else if (component._row) {
-      component = component._row;
-    }
-    menu = typeof menu == "function" ? menu.call(this.table, e, component.getComponent()) : menu;
-    this.loadMenu(e, component, menu);
-  }
-  loadMenu(e, component, menu, parentEl, parentPopup) {
-    var touch = !(e instanceof MouseEvent), menuEl = document.createElement("div"), popup;
-    menuEl.classList.add("tabulator-menu");
-    if (!touch) {
-      e.preventDefault();
-    }
-    if (!menu || !menu.length) {
-      return;
-    }
-    if (!parentEl) {
-      if (this.nestedMenuBlock) {
-        if (this.rootPopup) {
-          return;
-        }
-      } else {
-        this.nestedMenuBlock = setTimeout(() => {
-          this.nestedMenuBlock = false;
-        }, 100);
-      }
-      if (this.rootPopup) {
-        this.rootPopup.hide();
-      }
-      this.rootPopup = popup = this.popup(menuEl);
-    } else {
-      popup = parentPopup.child(menuEl);
-    }
-    menu.forEach((item) => {
-      var itemEl = document.createElement("div"), label = item.label, disabled = item.disabled;
-      if (item.separator) {
-        itemEl.classList.add("tabulator-menu-separator");
-      } else {
-        itemEl.classList.add("tabulator-menu-item");
-        if (typeof label == "function") {
-          label = label.call(this.table, component.getComponent());
-        }
-        if (label instanceof Node) {
-          itemEl.appendChild(label);
-        } else {
-          itemEl.innerHTML = label;
-        }
-        if (typeof disabled == "function") {
-          disabled = disabled.call(this.table, component.getComponent());
-        }
-        if (disabled) {
-          itemEl.classList.add("tabulator-menu-item-disabled");
-          itemEl.addEventListener("click", (e2) => {
-            e2.stopPropagation();
-          });
-        } else {
-          if (item.menu && item.menu.length) {
-            itemEl.addEventListener("click", (e2) => {
-              e2.stopPropagation();
-              this.loadMenu(e2, component, item.menu, itemEl, popup);
-            });
-          } else {
-            if (item.action) {
-              itemEl.addEventListener("click", (e2) => {
-                item.action(e2, component.getComponent());
-              });
-            }
-          }
-        }
-        if (item.menu && item.menu.length) {
-          itemEl.classList.add("tabulator-menu-item-submenu");
-        }
-      }
-      menuEl.appendChild(itemEl);
-    });
-    menuEl.addEventListener("click", (e2) => {
-      if (this.rootPopup) {
-        this.rootPopup.hide();
-      }
-    });
-    popup.show(parentEl || e);
-    if (popup === this.rootPopup) {
-      this.rootPopup.hideOnBlur(() => {
-        this.rootPopup = null;
-        if (this.currentComponent) {
-          this.dispatchExternal("menuClosed", this.currentComponent.getComponent());
-          this.currentComponent = null;
-        }
-      });
-      this.currentComponent = component;
-      this.dispatchExternal("menuOpened", component.getComponent());
-    }
-  }
-}
-Menu.moduleName = "menu";
-
 class MoveColumns extends Module {
   constructor(table) {
     super(table);
@@ -7899,1834 +9855,6 @@ class MoveColumns extends Module {
 }
 MoveColumns.moduleName = "moveColumn";
 
-class MoveRows extends Module {
-  constructor(table) {
-    super(table);
-    this.placeholderElement = this.createPlaceholderElement();
-    this.hoverElement = false;
-    this.checkTimeout = false;
-    this.checkPeriod = 150;
-    this.moving = false;
-    this.toRow = false;
-    this.toRowAfter = false;
-    this.hasHandle = false;
-    this.startY = 0;
-    this.startX = 0;
-    this.moveHover = this.moveHover.bind(this);
-    this.endMove = this.endMove.bind(this);
-    this.tableRowDropEvent = false;
-    this.touchMove = false;
-    this.connection = false;
-    this.connectionSelectorsTables = false;
-    this.connectionSelectorsElements = false;
-    this.connectionElements = [];
-    this.connections = [];
-    this.connectedTable = false;
-    this.connectedRow = false;
-    this.registerTableOption("movableRows", false);
-    this.registerTableOption("movableRowsConnectedTables", false);
-    this.registerTableOption("movableRowsConnectedElements", false);
-    this.registerTableOption("movableRowsSender", false);
-    this.registerTableOption("movableRowsReceiver", "insert");
-    this.registerColumnOption("rowHandle");
-  }
-  createPlaceholderElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-row");
-    el.classList.add("tabulator-row-placeholder");
-    return el;
-  }
-  initialize() {
-    if (this.table.options.movableRows) {
-      this.connectionSelectorsTables = this.table.options.movableRowsConnectedTables;
-      this.connectionSelectorsElements = this.table.options.movableRowsConnectedElements;
-      this.connection = this.connectionSelectorsTables || this.connectionSelectorsElements;
-      this.subscribe("cell-init", this.initializeCell.bind(this));
-      this.subscribe("column-init", this.initializeColumn.bind(this));
-      this.subscribe("row-init", this.initializeRow.bind(this));
-    }
-  }
-  initializeGroupHeader(group) {
-    var self = this, config = {};
-    config.mouseup = function(e) {
-      self.tableRowDrop(e, group);
-    }.bind(self);
-    config.mousemove = function(e) {
-      var rowEl;
-      if (e.pageY - Helpers.elOffset(group.element).top + self.table.rowManager.element.scrollTop > group.getHeight() / 2) {
-        if (self.toRow !== group || !self.toRowAfter) {
-          rowEl = group.getElement();
-          rowEl.parentNode.insertBefore(self.placeholderElement, rowEl.nextSibling);
-          self.moveRow(group, true);
-        }
-      } else {
-        if (self.toRow !== group || self.toRowAfter) {
-          rowEl = group.getElement();
-          if (rowEl.previousSibling) {
-            rowEl.parentNode.insertBefore(self.placeholderElement, rowEl);
-            self.moveRow(group, false);
-          }
-        }
-      }
-    }.bind(self);
-    group.modules.moveRow = config;
-  }
-  initializeRow(row) {
-    var self = this, config = {}, rowEl;
-    config.mouseup = function(e) {
-      self.tableRowDrop(e, row);
-    }.bind(self);
-    config.mousemove = function(e) {
-      var rowEl2 = row.getElement();
-      if (e.pageY - Helpers.elOffset(rowEl2).top + self.table.rowManager.element.scrollTop > row.getHeight() / 2) {
-        if (self.toRow !== row || !self.toRowAfter) {
-          rowEl2.parentNode.insertBefore(self.placeholderElement, rowEl2.nextSibling);
-          self.moveRow(row, true);
-        }
-      } else {
-        if (self.toRow !== row || self.toRowAfter) {
-          rowEl2.parentNode.insertBefore(self.placeholderElement, rowEl2);
-          self.moveRow(row, false);
-        }
-      }
-    }.bind(self);
-    if (!this.hasHandle) {
-      rowEl = row.getElement();
-      rowEl.addEventListener("mousedown", function(e) {
-        if (e.which === 1) {
-          self.checkTimeout = setTimeout(function() {
-            self.startMove(e, row);
-          }, self.checkPeriod);
-        }
-      });
-      rowEl.addEventListener("mouseup", function(e) {
-        if (e.which === 1) {
-          if (self.checkTimeout) {
-            clearTimeout(self.checkTimeout);
-          }
-        }
-      });
-      this.bindTouchEvents(row, row.getElement());
-    }
-    row.modules.moveRow = config;
-  }
-  initializeColumn(column) {
-    if (column.definition.rowHandle && this.table.options.movableRows !== false) {
-      this.hasHandle = true;
-    }
-  }
-  initializeCell(cell) {
-    if (cell.column.definition.rowHandle && this.table.options.movableRows !== false) {
-      var self = this, cellEl = cell.getElement(true);
-      cellEl.addEventListener("mousedown", function(e) {
-        if (e.which === 1) {
-          self.checkTimeout = setTimeout(function() {
-            self.startMove(e, cell.row);
-          }, self.checkPeriod);
-        }
-      });
-      cellEl.addEventListener("mouseup", function(e) {
-        if (e.which === 1) {
-          if (self.checkTimeout) {
-            clearTimeout(self.checkTimeout);
-          }
-        }
-      });
-      this.bindTouchEvents(cell.row, cellEl);
-    }
-  }
-  bindTouchEvents(row, element) {
-    var startYMove = false, nextRow, prevRow, nextRowHeight, prevRowHeight, nextRowHeightLast, prevRowHeightLast;
-    element.addEventListener("touchstart", (e) => {
-      this.checkTimeout = setTimeout(() => {
-        this.touchMove = true;
-        nextRow = row.nextRow();
-        nextRowHeight = nextRow ? nextRow.getHeight() / 2 : 0;
-        prevRow = row.prevRow();
-        prevRowHeight = prevRow ? prevRow.getHeight() / 2 : 0;
-        nextRowHeightLast = 0;
-        prevRowHeightLast = 0;
-        startYMove = false;
-        this.startMove(e, row);
-      }, this.checkPeriod);
-    }, { passive: true });
-    this.moving, this.toRow, this.toRowAfter;
-    element.addEventListener("touchmove", (e) => {
-      var diff, moveToRow;
-      if (this.moving) {
-        e.preventDefault();
-        this.moveHover(e);
-        if (!startYMove) {
-          startYMove = e.touches[0].pageY;
-        }
-        diff = e.touches[0].pageY - startYMove;
-        if (diff > 0) {
-          if (nextRow && diff - nextRowHeightLast > nextRowHeight) {
-            moveToRow = nextRow;
-            if (moveToRow !== row) {
-              startYMove = e.touches[0].pageY;
-              moveToRow.getElement().parentNode.insertBefore(this.placeholderElement, moveToRow.getElement().nextSibling);
-              this.moveRow(moveToRow, true);
-            }
-          }
-        } else {
-          if (prevRow && -diff - prevRowHeightLast > prevRowHeight) {
-            moveToRow = prevRow;
-            if (moveToRow !== row) {
-              startYMove = e.touches[0].pageY;
-              moveToRow.getElement().parentNode.insertBefore(this.placeholderElement, moveToRow.getElement());
-              this.moveRow(moveToRow, false);
-            }
-          }
-        }
-        if (moveToRow) {
-          nextRow = moveToRow.nextRow();
-          nextRowHeightLast = nextRowHeight;
-          nextRowHeight = nextRow ? nextRow.getHeight() / 2 : 0;
-          prevRow = moveToRow.prevRow();
-          prevRowHeightLast = prevRowHeight;
-          prevRowHeight = prevRow ? prevRow.getHeight() / 2 : 0;
-        }
-      }
-    });
-    element.addEventListener("touchend", (e) => {
-      if (this.checkTimeout) {
-        clearTimeout(this.checkTimeout);
-      }
-      if (this.moving) {
-        this.endMove(e);
-        this.touchMove = false;
-      }
-    });
-  }
-  _bindMouseMove() {
-    this.table.rowManager.getDisplayRows().forEach((row) => {
-      if ((row.type === "row" || row.type === "group") && row.modules.moveRow && row.modules.moveRow.mousemove) {
-        row.getElement().addEventListener("mousemove", row.modules.moveRow.mousemove);
-      }
-    });
-  }
-  _unbindMouseMove() {
-    this.table.rowManager.getDisplayRows().forEach((row) => {
-      if ((row.type === "row" || row.type === "group") && row.modules.moveRow && row.modules.moveRow.mousemove) {
-        row.getElement().removeEventListener("mousemove", row.modules.moveRow.mousemove);
-      }
-    });
-  }
-  startMove(e, row) {
-    var element = row.getElement();
-    this.setStartPosition(e, row);
-    this.moving = row;
-    this.table.element.classList.add("tabulator-block-select");
-    this.placeholderElement.style.width = row.getWidth() + "px";
-    this.placeholderElement.style.height = row.getHeight() + "px";
-    if (!this.connection) {
-      element.parentNode.insertBefore(this.placeholderElement, element);
-      element.parentNode.removeChild(element);
-    } else {
-      this.table.element.classList.add("tabulator-movingrow-sending");
-      this.connectToTables(row);
-    }
-    this.hoverElement = element.cloneNode(true);
-    this.hoverElement.classList.add("tabulator-moving");
-    if (this.connection) {
-      document.body.appendChild(this.hoverElement);
-      this.hoverElement.style.left = "0";
-      this.hoverElement.style.top = "0";
-      this.hoverElement.style.width = this.table.element.clientWidth + "px";
-      this.hoverElement.style.whiteSpace = "nowrap";
-      this.hoverElement.style.overflow = "hidden";
-      this.hoverElement.style.pointerEvents = "none";
-    } else {
-      this.table.rowManager.getTableElement().appendChild(this.hoverElement);
-      this.hoverElement.style.left = "0";
-      this.hoverElement.style.top = "0";
-      this._bindMouseMove();
-    }
-    document.body.addEventListener("mousemove", this.moveHover);
-    document.body.addEventListener("mouseup", this.endMove);
-    this.dispatchExternal("rowMoving", row.getComponent());
-    this.moveHover(e);
-  }
-  setStartPosition(e, row) {
-    var pageX = this.touchMove ? e.touches[0].pageX : e.pageX, pageY = this.touchMove ? e.touches[0].pageY : e.pageY, element, position;
-    element = row.getElement();
-    if (this.connection) {
-      position = element.getBoundingClientRect();
-      this.startX = position.left - pageX + window.pageXOffset;
-      this.startY = position.top - pageY + window.pageYOffset;
-    } else {
-      this.startY = pageY - element.getBoundingClientRect().top;
-    }
-  }
-  endMove(e) {
-    if (!e || e.which === 1 || this.touchMove) {
-      this._unbindMouseMove();
-      if (!this.connection) {
-        this.placeholderElement.parentNode.insertBefore(this.moving.getElement(), this.placeholderElement.nextSibling);
-        this.placeholderElement.parentNode.removeChild(this.placeholderElement);
-      }
-      this.hoverElement.parentNode.removeChild(this.hoverElement);
-      this.table.element.classList.remove("tabulator-block-select");
-      if (this.toRow) {
-        this.table.rowManager.moveRow(this.moving, this.toRow, this.toRowAfter);
-      } else {
-        this.dispatchExternal("rowMoveCancelled", this.moving.getComponent());
-      }
-      this.moving = false;
-      this.toRow = false;
-      this.toRowAfter = false;
-      document.body.removeEventListener("mousemove", this.moveHover);
-      document.body.removeEventListener("mouseup", this.endMove);
-      if (this.connection) {
-        this.table.element.classList.remove("tabulator-movingrow-sending");
-        this.disconnectFromTables();
-      }
-    }
-  }
-  moveRow(row, after) {
-    this.toRow = row;
-    this.toRowAfter = after;
-  }
-  moveHover(e) {
-    if (this.connection) {
-      this.moveHoverConnections.call(this, e);
-    } else {
-      this.moveHoverTable.call(this, e);
-    }
-  }
-  moveHoverTable(e) {
-    var rowHolder = this.table.rowManager.getElement(), scrollTop = rowHolder.scrollTop, yPos = (this.touchMove ? e.touches[0].pageY : e.pageY) - rowHolder.getBoundingClientRect().top + scrollTop;
-    this.hoverElement.style.top = Math.min(yPos - this.startY, this.table.rowManager.element.scrollHeight - this.hoverElement.offsetHeight) + "px";
-  }
-  moveHoverConnections(e) {
-    this.hoverElement.style.left = this.startX + (this.touchMove ? e.touches[0].pageX : e.pageX) + "px";
-    this.hoverElement.style.top = this.startY + (this.touchMove ? e.touches[0].pageY : e.pageY) + "px";
-  }
-  elementRowDrop(e, element, row) {
-    this.dispatchExternal("movableRowsElementDrop", e, element, row ? row.getComponent() : false);
-  }
-  connectToTables(row) {
-    var connectionTables;
-    if (this.connectionSelectorsTables) {
-      connectionTables = this.commsConnections(this.connectionSelectorsTables);
-      this.dispatchExternal("movableRowsSendingStart", connectionTables);
-      this.commsSend(this.connectionSelectorsTables, "moveRow", "connect", {
-        row
-      });
-    }
-    if (this.connectionSelectorsElements) {
-      this.connectionElements = [];
-      if (!Array.isArray(this.connectionSelectorsElements)) {
-        this.connectionSelectorsElements = [this.connectionSelectorsElements];
-      }
-      this.connectionSelectorsElements.forEach((query) => {
-        if (typeof query === "string") {
-          this.connectionElements = this.connectionElements.concat(Array.prototype.slice.call(document.querySelectorAll(query)));
-        } else {
-          this.connectionElements.push(query);
-        }
-      });
-      this.connectionElements.forEach((element) => {
-        var dropEvent = (e) => {
-          this.elementRowDrop(e, element, this.moving);
-        };
-        element.addEventListener("mouseup", dropEvent);
-        element.tabulatorElementDropEvent = dropEvent;
-        element.classList.add("tabulator-movingrow-receiving");
-      });
-    }
-  }
-  disconnectFromTables() {
-    var connectionTables;
-    if (this.connectionSelectorsTables) {
-      connectionTables = this.commsConnections(this.connectionSelectorsTables);
-      this.dispatchExternal("movableRowsSendingStop", connectionTables);
-      this.commsSend(this.connectionSelectorsTables, "moveRow", "disconnect");
-    }
-    this.connectionElements.forEach((element) => {
-      element.classList.remove("tabulator-movingrow-receiving");
-      element.removeEventListener("mouseup", element.tabulatorElementDropEvent);
-      delete element.tabulatorElementDropEvent;
-    });
-  }
-  connect(table, row) {
-    if (!this.connectedTable) {
-      this.connectedTable = table;
-      this.connectedRow = row;
-      this.table.element.classList.add("tabulator-movingrow-receiving");
-      this.table.rowManager.getDisplayRows().forEach((row2) => {
-        if (row2.type === "row" && row2.modules.moveRow && row2.modules.moveRow.mouseup) {
-          row2.getElement().addEventListener("mouseup", row2.modules.moveRow.mouseup);
-        }
-      });
-      this.tableRowDropEvent = this.tableRowDrop.bind(this);
-      this.table.element.addEventListener("mouseup", this.tableRowDropEvent);
-      this.dispatchExternal("movableRowsReceivingStart", row, table);
-      return true;
-    } else {
-      console.warn("Move Row Error - Table cannot accept connection, already connected to table:", this.connectedTable);
-      return false;
-    }
-  }
-  disconnect(table) {
-    if (table === this.connectedTable) {
-      this.connectedTable = false;
-      this.connectedRow = false;
-      this.table.element.classList.remove("tabulator-movingrow-receiving");
-      this.table.rowManager.getDisplayRows().forEach((row) => {
-        if (row.type === "row" && row.modules.moveRow && row.modules.moveRow.mouseup) {
-          row.getElement().removeEventListener("mouseup", row.modules.moveRow.mouseup);
-        }
-      });
-      this.table.element.removeEventListener("mouseup", this.tableRowDropEvent);
-      this.dispatchExternal("movableRowsReceivingStop", table);
-    } else {
-      console.warn("Move Row Error - trying to disconnect from non connected table");
-    }
-  }
-  dropComplete(table, row, success) {
-    var sender = false;
-    if (success) {
-      switch (typeof this.table.options.movableRowsSender) {
-        case "string":
-          sender = this.senders[this.table.options.movableRowsSender];
-          break;
-        case "function":
-          sender = this.table.options.movableRowsSender;
-          break;
-      }
-      if (sender) {
-        sender.call(this, this.moving ? this.moving.getComponent() : void 0, row ? row.getComponent() : void 0, table);
-      } else {
-        if (this.table.options.movableRowsSender) {
-          console.warn("Mover Row Error - no matching sender found:", this.table.options.movableRowsSender);
-        }
-      }
-      this.dispatchExternal("movableRowsSent", this.moving.getComponent(), row ? row.getComponent() : void 0, table);
-    } else {
-      this.dispatchExternal("movableRowsSentFailed", this.moving.getComponent(), row ? row.getComponent() : void 0, table);
-    }
-    this.endMove();
-  }
-  tableRowDrop(e, row) {
-    var receiver = false, success = false;
-    e.stopImmediatePropagation();
-    switch (typeof this.table.options.movableRowsReceiver) {
-      case "string":
-        receiver = this.receivers[this.table.options.movableRowsReceiver];
-        break;
-      case "function":
-        receiver = this.table.options.movableRowsReceiver;
-        break;
-    }
-    if (receiver) {
-      success = receiver.call(this, this.connectedRow.getComponent(), row ? row.getComponent() : void 0, this.connectedTable);
-    } else {
-      console.warn("Mover Row Error - no matching receiver found:", this.table.options.movableRowsReceiver);
-    }
-    if (success) {
-      this.dispatchExternal("movableRowsReceived", this.connectedRow.getComponent(), row ? row.getComponent() : void 0, this.connectedTable);
-    } else {
-      this.dispatchExternal("movableRowsReceivedFailed", this.connectedRow.getComponent(), row ? row.getComponent() : void 0, this.connectedTable);
-    }
-    this.commsSend(this.connectedTable, "moveRow", "dropcomplete", {
-      row,
-      success
-    });
-  }
-  commsReceived(table, action, data) {
-    switch (action) {
-      case "connect":
-        return this.connect(table, data.row);
-      case "disconnect":
-        return this.disconnect(table);
-      case "dropcomplete":
-        return this.dropComplete(table, data.row, data.success);
-    }
-  }
-}
-MoveRows.prototype.receivers = {
-  insert: function(fromRow, toRow, fromTable) {
-    this.table.addRow(fromRow.getData(), void 0, toRow);
-    return true;
-  },
-  add: function(fromRow, toRow, fromTable) {
-    this.table.addRow(fromRow.getData());
-    return true;
-  },
-  update: function(fromRow, toRow, fromTable) {
-    if (toRow) {
-      toRow.update(fromRow.getData());
-      return true;
-    }
-    return false;
-  },
-  replace: function(fromRow, toRow, fromTable) {
-    if (toRow) {
-      this.table.addRow(fromRow.getData(), void 0, toRow);
-      toRow.delete();
-      return true;
-    }
-    return false;
-  }
-};
-MoveRows.prototype.senders = {
-  delete: function(fromRow, toRow, toTable) {
-    fromRow.delete();
-  }
-};
-MoveRows.moduleName = "moveRow";
-
-var defaultMutators = {};
-
-class Mutator extends Module {
-  constructor(table) {
-    super(table);
-    this.allowedTypes = ["", "data", "edit", "clipboard"];
-    this.enabled = true;
-    this.registerColumnOption("mutator");
-    this.registerColumnOption("mutatorParams");
-    this.registerColumnOption("mutatorData");
-    this.registerColumnOption("mutatorDataParams");
-    this.registerColumnOption("mutatorEdit");
-    this.registerColumnOption("mutatorEditParams");
-    this.registerColumnOption("mutatorClipboard");
-    this.registerColumnOption("mutatorClipboardParams");
-    this.registerColumnOption("mutateLink");
-  }
-  initialize() {
-    this.subscribe("cell-value-changing", this.transformCell.bind(this));
-    this.subscribe("cell-value-changed", this.mutateLink.bind(this));
-    this.subscribe("column-layout", this.initializeColumn.bind(this));
-    this.subscribe("row-data-init-before", this.rowDataChanged.bind(this));
-    this.subscribe("row-data-changing", this.rowDataChanged.bind(this));
-  }
-  rowDataChanged(row, tempData, updatedData) {
-    return this.transformRow(tempData, "data", updatedData);
-  }
-  initializeColumn(column) {
-    var match = false, config = {};
-    this.allowedTypes.forEach((type) => {
-      var key = "mutator" + (type.charAt(0).toUpperCase() + type.slice(1)), mutator;
-      if (column.definition[key]) {
-        mutator = this.lookupMutator(column.definition[key]);
-        if (mutator) {
-          match = true;
-          config[key] = {
-            mutator,
-            params: column.definition[key + "Params"] || {}
-          };
-        }
-      }
-    });
-    if (match) {
-      column.modules.mutate = config;
-    }
-  }
-  lookupMutator(value) {
-    var mutator = false;
-    switch (typeof value) {
-      case "string":
-        if (Mutator.mutators[value]) {
-          mutator = Mutator.mutators[value];
-        } else {
-          console.warn("Mutator Error - No such mutator found, ignoring: ", value);
-        }
-        break;
-      case "function":
-        mutator = value;
-        break;
-    }
-    return mutator;
-  }
-  transformRow(data, type, updatedData) {
-    var key = "mutator" + (type.charAt(0).toUpperCase() + type.slice(1)), value;
-    if (this.enabled) {
-      this.table.columnManager.traverse((column) => {
-        var mutator, params, component;
-        if (column.modules.mutate) {
-          mutator = column.modules.mutate[key] || column.modules.mutate.mutator || false;
-          if (mutator) {
-            value = column.getFieldValue(typeof updatedData !== "undefined" ? updatedData : data);
-            if (type == "data" || typeof value !== "undefined") {
-              component = column.getComponent();
-              params = typeof mutator.params === "function" ? mutator.params(value, data, type, component) : mutator.params;
-              column.setFieldValue(data, mutator.mutator(value, data, type, params, component));
-            }
-          }
-        }
-      });
-    }
-    return data;
-  }
-  transformCell(cell, value) {
-    if (cell.column.modules.mutate) {
-      var mutator = cell.column.modules.mutate.mutatorEdit || cell.column.modules.mutate.mutator || false, tempData = {};
-      if (mutator) {
-        tempData = Object.assign(tempData, cell.row.getData());
-        cell.column.setFieldValue(tempData, value);
-        return mutator.mutator(value, tempData, "edit", mutator.params, cell.getComponent());
-      }
-    }
-    return value;
-  }
-  mutateLink(cell) {
-    var links = cell.column.definition.mutateLink;
-    if (links) {
-      if (!Array.isArray(links)) {
-        links = [links];
-      }
-      links.forEach((link) => {
-        var linkCell = cell.row.getCell(link);
-        if (linkCell) {
-          linkCell.setValue(linkCell.getValue(), true, true);
-        }
-      });
-    }
-  }
-  enable() {
-    this.enabled = true;
-  }
-  disable() {
-    this.enabled = false;
-  }
-}
-Mutator.moduleName = "mutator";
-Mutator.mutators = defaultMutators;
-
-function rows(pageSize, currentRow, currentPage, totalRows, totalPages) {
-  var el = document.createElement("span"), showingEl = document.createElement("span"), valueEl = document.createElement("span"), ofEl = document.createElement("span"), totalEl = document.createElement("span"), rowsEl = document.createElement("span");
-  this.table.modules.localize.langBind("pagination|counter|showing", (value) => {
-    showingEl.innerHTML = value;
-  });
-  this.table.modules.localize.langBind("pagination|counter|of", (value) => {
-    ofEl.innerHTML = value;
-  });
-  this.table.modules.localize.langBind("pagination|counter|rows", (value) => {
-    rowsEl.innerHTML = value;
-  });
-  if (totalRows) {
-    valueEl.innerHTML = " " + currentRow + "-" + Math.min(currentRow + pageSize - 1, totalRows) + " ";
-    totalEl.innerHTML = " " + totalRows + " ";
-    el.appendChild(showingEl);
-    el.appendChild(valueEl);
-    el.appendChild(ofEl);
-    el.appendChild(totalEl);
-    el.appendChild(rowsEl);
-  } else {
-    valueEl.innerHTML = " 0 ";
-    el.appendChild(showingEl);
-    el.appendChild(valueEl);
-    el.appendChild(rowsEl);
-  }
-  return el;
-}
-
-function pages(pageSize, currentRow, currentPage, totalRows, totalPages) {
-  var el = document.createElement("span"), showingEl = document.createElement("span"), valueEl = document.createElement("span"), ofEl = document.createElement("span"), totalEl = document.createElement("span"), rowsEl = document.createElement("span");
-  this.table.modules.localize.langBind("pagination|counter|showing", (value) => {
-    showingEl.innerHTML = value;
-  });
-  valueEl.innerHTML = " " + currentPage + " ";
-  this.table.modules.localize.langBind("pagination|counter|of", (value) => {
-    ofEl.innerHTML = value;
-  });
-  totalEl.innerHTML = " " + totalPages + " ";
-  this.table.modules.localize.langBind("pagination|counter|pages", (value) => {
-    rowsEl.innerHTML = value;
-  });
-  el.appendChild(showingEl);
-  el.appendChild(valueEl);
-  el.appendChild(ofEl);
-  el.appendChild(totalEl);
-  el.appendChild(rowsEl);
-  return el;
-}
-
-var defaultPageCounters = {
-  rows,
-  pages
-};
-
-class Page extends Module {
-  constructor(table) {
-    super(table);
-    this.mode = "local";
-    this.progressiveLoad = false;
-    this.element = null;
-    this.pageCounterElement = null;
-    this.pageCounter = null;
-    this.size = 0;
-    this.page = 1;
-    this.count = 5;
-    this.max = 1;
-    this.remoteRowCountEstimate = null;
-    this.initialLoad = true;
-    this.dataChanging = false;
-    this.pageSizes = [];
-    this.registerTableOption("pagination", false);
-    this.registerTableOption("paginationMode", "local");
-    this.registerTableOption("paginationSize", false);
-    this.registerTableOption("paginationInitialPage", 1);
-    this.registerTableOption("paginationCounter", false);
-    this.registerTableOption("paginationCounterElement", false);
-    this.registerTableOption("paginationButtonCount", 5);
-    this.registerTableOption("paginationSizeSelector", false);
-    this.registerTableOption("paginationElement", false);
-    this.registerTableOption("paginationAddRow", "page");
-    this.registerTableOption("progressiveLoad", false);
-    this.registerTableOption("progressiveLoadDelay", 0);
-    this.registerTableOption("progressiveLoadScrollMargin", 0);
-    this.registerTableFunction("setMaxPage", this.setMaxPage.bind(this));
-    this.registerTableFunction("setPage", this.setPage.bind(this));
-    this.registerTableFunction("setPageToRow", this.userSetPageToRow.bind(this));
-    this.registerTableFunction("setPageSize", this.userSetPageSize.bind(this));
-    this.registerTableFunction("getPageSize", this.getPageSize.bind(this));
-    this.registerTableFunction("previousPage", this.previousPage.bind(this));
-    this.registerTableFunction("nextPage", this.nextPage.bind(this));
-    this.registerTableFunction("getPage", this.getPage.bind(this));
-    this.registerTableFunction("getPageMax", this.getPageMax.bind(this));
-    this.registerComponentFunction("row", "pageTo", this.setPageToRow.bind(this));
-  }
-  initialize() {
-    if (this.table.options.pagination) {
-      this.subscribe("row-deleted", this.rowsUpdated.bind(this));
-      this.subscribe("row-added", this.rowsUpdated.bind(this));
-      this.subscribe("data-processed", this.initialLoadComplete.bind(this));
-      this.subscribe("table-built", this.calculatePageSizes.bind(this));
-      this.subscribe("footer-redraw", this.footerRedraw.bind(this));
-      if (this.table.options.paginationAddRow == "page") {
-        this.subscribe("row-adding-position", this.rowAddingPosition.bind(this));
-      }
-      if (this.table.options.paginationMode === "remote") {
-        this.subscribe("data-params", this.remotePageParams.bind(this));
-        this.subscribe("data-loaded", this._parseRemoteData.bind(this));
-      }
-      if (this.table.options.progressiveLoad) {
-        console.error("Progressive Load Error - Pagination and progressive load cannot be used at the same time");
-      }
-      this.registerDisplayHandler(this.restOnRenderBefore.bind(this), 40);
-      this.registerDisplayHandler(this.getRows.bind(this), 50);
-      this.createElements();
-      this.initializePageCounter();
-      this.initializePaginator();
-    } else if (this.table.options.progressiveLoad) {
-      this.subscribe("data-params", this.remotePageParams.bind(this));
-      this.subscribe("data-loaded", this._parseRemoteData.bind(this));
-      this.subscribe("table-built", this.calculatePageSizes.bind(this));
-      this.subscribe("data-processed", this.initialLoadComplete.bind(this));
-      this.initializeProgressive(this.table.options.progressiveLoad);
-      if (this.table.options.progressiveLoad === "scroll") {
-        this.subscribe("scroll-vertical", this.scrollVertical.bind(this));
-      }
-    }
-  }
-  rowAddingPosition(row, top) {
-    var rowManager = this.table.rowManager, displayRows = rowManager.getDisplayRows(), index;
-    if (top) {
-      if (displayRows.length) {
-        index = displayRows[0];
-      } else {
-        if (rowManager.activeRows.length) {
-          index = rowManager.activeRows[rowManager.activeRows.length - 1];
-          top = false;
-        }
-      }
-    } else {
-      if (displayRows.length) {
-        index = displayRows[displayRows.length - 1];
-        top = displayRows.length < this.size ? false : true;
-      }
-    }
-    return { index, top };
-  }
-  calculatePageSizes() {
-    var testElRow, testElCell;
-    if (this.table.options.paginationSize) {
-      this.size = this.table.options.paginationSize;
-    } else {
-      testElRow = document.createElement("div");
-      testElRow.classList.add("tabulator-row");
-      testElRow.style.visibility = "hidden";
-      testElCell = document.createElement("div");
-      testElCell.classList.add("tabulator-cell");
-      testElCell.innerHTML = "Page Row Test";
-      testElRow.appendChild(testElCell);
-      this.table.rowManager.getTableElement().appendChild(testElRow);
-      this.size = Math.floor(this.table.rowManager.getElement().clientHeight / testElRow.offsetHeight);
-      this.table.rowManager.getTableElement().removeChild(testElRow);
-    }
-    this.dispatchExternal("pageSizeChanged", this.size);
-    this.generatePageSizeSelectList();
-  }
-  initialLoadComplete() {
-    this.initialLoad = false;
-  }
-  remotePageParams(data, config, silent, params) {
-    if (!this.initialLoad) {
-      if (this.progressiveLoad && !silent || !this.progressiveLoad && !this.dataChanging) {
-        this.reset(true);
-      }
-    }
-    params.page = this.page;
-    if (this.size) {
-      params.size = this.size;
-    }
-    return params;
-  }
-  userSetPageToRow(row) {
-    if (this.table.options.pagination) {
-      row = this.rowManager.findRow(row);
-      if (row) {
-        return this.setPageToRow(row);
-      }
-    }
-    return Promise.reject();
-  }
-  userSetPageSize(size) {
-    if (this.table.options.pagination) {
-      this.setPageSize(size);
-      return this.setPage(1);
-    } else {
-      return false;
-    }
-  }
-  scrollVertical(top, dir) {
-    var element, diff, margin;
-    if (!dir && !this.table.dataLoader.loading) {
-      element = this.table.rowManager.getElement();
-      diff = element.scrollHeight - element.clientHeight - top;
-      margin = this.table.options.progressiveLoadScrollMargin || element.clientHeight * 2;
-      if (diff < margin) {
-        this.nextPage().catch(() => {
-        });
-      }
-    }
-  }
-  restOnRenderBefore(rows, renderInPosition) {
-    if (!renderInPosition) {
-      if (this.mode === "local") {
-        this.reset();
-      }
-    }
-    return rows;
-  }
-  rowsUpdated() {
-    this.refreshData(true, "all");
-  }
-  createElements() {
-    var button;
-    this.element = document.createElement("span");
-    this.element.classList.add("tabulator-paginator");
-    this.pagesElement = document.createElement("span");
-    this.pagesElement.classList.add("tabulator-pages");
-    button = document.createElement("button");
-    button.classList.add("tabulator-page");
-    button.setAttribute("type", "button");
-    button.setAttribute("role", "button");
-    button.setAttribute("aria-label", "");
-    button.setAttribute("title", "");
-    this.firstBut = button.cloneNode(true);
-    this.firstBut.setAttribute("data-page", "first");
-    this.prevBut = button.cloneNode(true);
-    this.prevBut.setAttribute("data-page", "prev");
-    this.nextBut = button.cloneNode(true);
-    this.nextBut.setAttribute("data-page", "next");
-    this.lastBut = button.cloneNode(true);
-    this.lastBut.setAttribute("data-page", "last");
-    if (this.table.options.paginationSizeSelector) {
-      this.pageSizeSelect = document.createElement("select");
-      this.pageSizeSelect.classList.add("tabulator-page-size");
-    }
-  }
-  generatePageSizeSelectList() {
-    var pageSizes = [];
-    if (this.pageSizeSelect) {
-      if (Array.isArray(this.table.options.paginationSizeSelector)) {
-        pageSizes = this.table.options.paginationSizeSelector;
-        this.pageSizes = pageSizes;
-        if (this.pageSizes.indexOf(this.size) == -1) {
-          pageSizes.unshift(this.size);
-        }
-      } else {
-        if (this.pageSizes.indexOf(this.size) == -1) {
-          pageSizes = [];
-          for (let i = 1; i < 5; i++) {
-            pageSizes.push(this.size * i);
-          }
-          this.pageSizes = pageSizes;
-        } else {
-          pageSizes = this.pageSizes;
-        }
-      }
-      while (this.pageSizeSelect.firstChild)
-        this.pageSizeSelect.removeChild(this.pageSizeSelect.firstChild);
-      pageSizes.forEach((item) => {
-        var itemEl = document.createElement("option");
-        itemEl.value = item;
-        if (item === true) {
-          this.langBind("pagination|all", function(value) {
-            itemEl.innerHTML = value;
-          });
-        } else {
-          itemEl.innerHTML = item;
-        }
-        this.pageSizeSelect.appendChild(itemEl);
-      });
-      this.pageSizeSelect.value = this.size;
-    }
-  }
-  initializePageCounter() {
-    var counter = this.table.options.paginationCounter, pageCounter = null;
-    if (counter) {
-      if (typeof counter === "function") {
-        pageCounter = counter;
-      } else {
-        pageCounter = Page.pageCounters[counter];
-      }
-      if (pageCounter) {
-        this.pageCounter = pageCounter;
-        this.pageCounterElement = document.createElement("span");
-        this.pageCounterElement.classList.add("tabulator-page-counter");
-      } else {
-        console.warn("Pagination Error - No such page counter found: ", counter);
-      }
-    }
-  }
-  initializePaginator(hidden) {
-    var pageSelectLabel, paginationCounterHolder;
-    if (!hidden) {
-      this.langBind("pagination|first", (value) => {
-        this.firstBut.innerHTML = value;
-      });
-      this.langBind("pagination|first_title", (value) => {
-        this.firstBut.setAttribute("aria-label", value);
-        this.firstBut.setAttribute("title", value);
-      });
-      this.langBind("pagination|prev", (value) => {
-        this.prevBut.innerHTML = value;
-      });
-      this.langBind("pagination|prev_title", (value) => {
-        this.prevBut.setAttribute("aria-label", value);
-        this.prevBut.setAttribute("title", value);
-      });
-      this.langBind("pagination|next", (value) => {
-        this.nextBut.innerHTML = value;
-      });
-      this.langBind("pagination|next_title", (value) => {
-        this.nextBut.setAttribute("aria-label", value);
-        this.nextBut.setAttribute("title", value);
-      });
-      this.langBind("pagination|last", (value) => {
-        this.lastBut.innerHTML = value;
-      });
-      this.langBind("pagination|last_title", (value) => {
-        this.lastBut.setAttribute("aria-label", value);
-        this.lastBut.setAttribute("title", value);
-      });
-      this.firstBut.addEventListener("click", () => {
-        this.setPage(1);
-      });
-      this.prevBut.addEventListener("click", () => {
-        this.previousPage();
-      });
-      this.nextBut.addEventListener("click", () => {
-        this.nextPage();
-      });
-      this.lastBut.addEventListener("click", () => {
-        this.setPage(this.max);
-      });
-      if (this.table.options.paginationElement) {
-        this.element = this.table.options.paginationElement;
-      }
-      if (this.pageSizeSelect) {
-        pageSelectLabel = document.createElement("label");
-        this.langBind("pagination|page_size", (value) => {
-          this.pageSizeSelect.setAttribute("aria-label", value);
-          this.pageSizeSelect.setAttribute("title", value);
-          pageSelectLabel.innerHTML = value;
-        });
-        this.element.appendChild(pageSelectLabel);
-        this.element.appendChild(this.pageSizeSelect);
-        this.pageSizeSelect.addEventListener("change", (e) => {
-          this.setPageSize(this.pageSizeSelect.value == "true" ? true : this.pageSizeSelect.value);
-          this.setPage(1);
-        });
-      }
-      this.element.appendChild(this.firstBut);
-      this.element.appendChild(this.prevBut);
-      this.element.appendChild(this.pagesElement);
-      this.element.appendChild(this.nextBut);
-      this.element.appendChild(this.lastBut);
-      if (!this.table.options.paginationElement) {
-        if (this.table.options.paginationCounter) {
-          if (this.table.options.paginationCounterElement) {
-            if (this.table.options.paginationCounterElement instanceof HTMLElement) {
-              this.table.options.paginationCounterElement.appendChild(this.pageCounterElement);
-            } else if (typeof this.table.options.paginationCounterElement === "string") {
-              paginationCounterHolder = document.querySelector(this.table.options.paginationCounterElement);
-              if (paginationCounterHolder) {
-                paginationCounterHolder.appendChild(this.pageCounterElement);
-              } else {
-                console.warn("Pagination Error - Unable to find element matching paginationCounterElement selector:", this.table.options.paginationCounterElement);
-              }
-            }
-          } else {
-            this.footerAppend(this.pageCounterElement);
-          }
-        }
-        this.footerAppend(this.element);
-      }
-      this.page = this.table.options.paginationInitialPage;
-      this.count = this.table.options.paginationButtonCount;
-    }
-    this.mode = this.table.options.paginationMode;
-  }
-  initializeProgressive(mode) {
-    this.initializePaginator(true);
-    this.mode = "progressive_" + mode;
-    this.progressiveLoad = true;
-  }
-  trackChanges() {
-    this.dispatch("page-changed");
-  }
-  setMaxRows(rowCount) {
-    if (!rowCount) {
-      this.max = 1;
-    } else {
-      this.max = this.size === true ? 1 : Math.ceil(rowCount / this.size);
-    }
-    if (this.page > this.max) {
-      this.page = this.max;
-    }
-  }
-  reset(force) {
-    if (!this.initialLoad) {
-      if (this.mode == "local" || force) {
-        this.page = 1;
-        this.trackChanges();
-      }
-    }
-  }
-  setMaxPage(max) {
-    max = parseInt(max);
-    this.max = max || 1;
-    if (this.page > this.max) {
-      this.page = this.max;
-      this.trigger();
-    }
-  }
-  setPage(page) {
-    switch (page) {
-      case "first":
-        return this.setPage(1);
-      case "prev":
-        return this.previousPage();
-      case "next":
-        return this.nextPage();
-      case "last":
-        return this.setPage(this.max);
-    }
-    page = parseInt(page);
-    if (page > 0 && page <= this.max || this.mode !== "local") {
-      this.page = page;
-      this.trackChanges();
-      return this.trigger();
-    } else {
-      console.warn("Pagination Error - Requested page is out of range of 1 - " + this.max + ":", page);
-      return Promise.reject();
-    }
-  }
-  setPageToRow(row) {
-    var rows = this.displayRows(-1);
-    var index = rows.indexOf(row);
-    if (index > -1) {
-      var page = this.size === true ? 1 : Math.ceil((index + 1) / this.size);
-      return this.setPage(page);
-    } else {
-      console.warn("Pagination Error - Requested row is not visible");
-      return Promise.reject();
-    }
-  }
-  setPageSize(size) {
-    if (size !== true) {
-      size = parseInt(size);
-    }
-    if (size > 0) {
-      this.size = size;
-      this.dispatchExternal("pageSizeChanged", size);
-    }
-    if (this.pageSizeSelect) {
-      this.generatePageSizeSelectList();
-    }
-    this.trackChanges();
-  }
-  _setPageCounter(totalRows, size, currentRow) {
-    var content;
-    if (this.pageCounter) {
-      if (this.mode === "remote") {
-        size = this.size;
-        currentRow = (this.page - 1) * this.size + 1;
-        totalRows = this.remoteRowCountEstimate;
-      }
-      content = this.pageCounter.call(this, size, currentRow, this.page, totalRows, this.max);
-      switch (typeof content) {
-        case "object":
-          if (content instanceof Node) {
-            while (this.pageCounterElement.firstChild)
-              this.pageCounterElement.removeChild(this.pageCounterElement.firstChild);
-            this.pageCounterElement.appendChild(content);
-          } else {
-            this.pageCounterElement.innerHTML = "";
-            if (content != null) {
-              console.warn("Page Counter Error - Page Counter has returned a type of object, the only valid page counter object return is an instance of Node, the page counter returned:", content);
-            }
-          }
-          break;
-        case "undefined":
-          this.pageCounterElement.innerHTML = "";
-          break;
-        default:
-          this.pageCounterElement.innerHTML = content;
-      }
-    }
-  }
-  _setPageButtons() {
-    let leftSize = Math.floor((this.count - 1) / 2);
-    let rightSize = Math.ceil((this.count - 1) / 2);
-    let min = this.max - this.page + leftSize + 1 < this.count ? this.max - this.count + 1 : Math.max(this.page - leftSize, 1);
-    let max = this.page <= rightSize ? Math.min(this.count, this.max) : Math.min(this.page + rightSize, this.max);
-    while (this.pagesElement.firstChild)
-      this.pagesElement.removeChild(this.pagesElement.firstChild);
-    if (this.page == 1) {
-      this.firstBut.disabled = true;
-      this.prevBut.disabled = true;
-    } else {
-      this.firstBut.disabled = false;
-      this.prevBut.disabled = false;
-    }
-    if (this.page == this.max) {
-      this.lastBut.disabled = true;
-      this.nextBut.disabled = true;
-    } else {
-      this.lastBut.disabled = false;
-      this.nextBut.disabled = false;
-    }
-    for (let i = min; i <= max; i++) {
-      if (i > 0 && i <= this.max) {
-        this.pagesElement.appendChild(this._generatePageButton(i));
-      }
-    }
-    this.footerRedraw();
-  }
-  _generatePageButton(page) {
-    var button = document.createElement("button");
-    button.classList.add("tabulator-page");
-    if (page == this.page) {
-      button.classList.add("active");
-    }
-    button.setAttribute("type", "button");
-    button.setAttribute("role", "button");
-    this.langBind("pagination|page_title", (value) => {
-      button.setAttribute("aria-label", value + " " + page);
-      button.setAttribute("title", value + " " + page);
-    });
-    button.setAttribute("data-page", page);
-    button.textContent = page;
-    button.addEventListener("click", (e) => {
-      this.setPage(page);
-    });
-    return button;
-  }
-  previousPage() {
-    if (this.page > 1) {
-      this.page--;
-      this.trackChanges();
-      return this.trigger();
-    } else {
-      console.warn("Pagination Error - Previous page would be less than page 1:", 0);
-      return Promise.reject();
-    }
-  }
-  nextPage() {
-    if (this.page < this.max) {
-      this.page++;
-      this.trackChanges();
-      return this.trigger();
-    } else {
-      if (!this.progressiveLoad) {
-        console.warn("Pagination Error - Next page would be greater than maximum page of " + this.max + ":", this.max + 1);
-      }
-      return Promise.reject();
-    }
-  }
-  getPage() {
-    return this.page;
-  }
-  getPageMax() {
-    return this.max;
-  }
-  getPageSize(size) {
-    return this.size;
-  }
-  getMode() {
-    return this.mode;
-  }
-  getRows(data) {
-    var actualRowPageSize = 0, output, start, end, actualStartRow;
-    var actualRows = data.filter((row) => {
-      return row.type === "row";
-    });
-    if (this.mode == "local") {
-      output = [];
-      this.setMaxRows(data.length);
-      if (this.size === true) {
-        start = 0;
-        end = data.length;
-      } else {
-        start = this.size * (this.page - 1);
-        end = start + parseInt(this.size);
-      }
-      this._setPageButtons();
-      for (let i = start; i < end; i++) {
-        let row = data[i];
-        if (row) {
-          output.push(row);
-          if (row.type === "row") {
-            if (!actualStartRow) {
-              actualStartRow = row;
-            }
-            actualRowPageSize++;
-          }
-        }
-      }
-      this._setPageCounter(actualRows.length, actualRowPageSize, actualStartRow ? actualRows.indexOf(actualStartRow) + 1 : 0);
-      return output;
-    } else {
-      this._setPageButtons();
-      this._setPageCounter(actualRows.length);
-      return data.slice(0);
-    }
-  }
-  trigger() {
-    var left;
-    switch (this.mode) {
-      case "local":
-        left = this.table.rowManager.scrollLeft;
-        this.refreshData();
-        this.table.rowManager.scrollHorizontal(left);
-        this.dispatchExternal("pageLoaded", this.getPage());
-        return Promise.resolve();
-      case "remote":
-        this.dataChanging = true;
-        return this.reloadData(null).finally(() => {
-          this.dataChanging = false;
-        });
-      case "progressive_load":
-      case "progressive_scroll":
-        return this.reloadData(null, true);
-      default:
-        console.warn("Pagination Error - no such pagination mode:", this.mode);
-        return Promise.reject();
-    }
-  }
-  _parseRemoteData(data) {
-    var margin;
-    if (typeof data.last_page === "undefined") {
-      console.warn("Remote Pagination Error - Server response missing '" + (this.options("dataReceiveParams").last_page || "last_page") + "' property");
-    }
-    if (data.data) {
-      this.max = parseInt(data.last_page) || 1;
-      this.remoteRowCountEstimate = typeof data.last_row !== "undefined" ? data.last_row : data.last_page * this.size - (this.page == data.last_page ? this.size - data.data.length : 0);
-      if (this.progressiveLoad) {
-        switch (this.mode) {
-          case "progressive_load":
-            if (this.page == 1) {
-              this.table.rowManager.setData(data.data, false, this.page == 1);
-            } else {
-              this.table.rowManager.addRows(data.data);
-            }
-            if (this.page < this.max) {
-              setTimeout(() => {
-                this.nextPage();
-              }, this.table.options.progressiveLoadDelay);
-            }
-            break;
-          case "progressive_scroll":
-            data = this.page === 1 ? data.data : this.table.rowManager.getData().concat(data.data);
-            this.table.rowManager.setData(data, this.page !== 1, this.page == 1);
-            margin = this.table.options.progressiveLoadScrollMargin || this.table.rowManager.element.clientHeight * 2;
-            if (this.table.rowManager.element.scrollHeight <= this.table.rowManager.element.clientHeight + margin) {
-              if (this.page < this.max) {
-                setTimeout(() => {
-                  this.nextPage();
-                });
-              }
-            }
-            break;
-        }
-        return false;
-      } else {
-        this.dispatchExternal("pageLoaded", this.getPage());
-      }
-    } else {
-      console.warn("Remote Pagination Error - Server response missing '" + (this.options("dataReceiveParams").data || "data") + "' property");
-    }
-    return data.data;
-  }
-  footerRedraw() {
-    var footer = this.table.footerManager.containerElement;
-    if (Math.ceil(footer.clientWidth) - footer.scrollWidth < 0) {
-      this.pagesElement.style.display = "none";
-    } else {
-      this.pagesElement.style.display = "";
-      if (Math.ceil(footer.clientWidth) - footer.scrollWidth < 0) {
-        this.pagesElement.style.display = "none";
-      }
-    }
-  }
-}
-Page.moduleName = "page";
-Page.pageCounters = defaultPageCounters;
-
-var defaultReaders = {
-  local: function(id, type) {
-    var data = localStorage.getItem(id + "-" + type);
-    return data ? JSON.parse(data) : false;
-  },
-  cookie: function(id, type) {
-    var cookie = document.cookie, key = id + "-" + type, cookiePos = cookie.indexOf(key + "="), end, data;
-    if (cookiePos > -1) {
-      cookie = cookie.slice(cookiePos);
-      end = cookie.indexOf(";");
-      if (end > -1) {
-        cookie = cookie.slice(0, end);
-      }
-      data = cookie.replace(key + "=", "");
-    }
-    return data ? JSON.parse(data) : false;
-  }
-};
-
-var defaultWriters = {
-  local: function(id, type, data) {
-    localStorage.setItem(id + "-" + type, JSON.stringify(data));
-  },
-  cookie: function(id, type, data) {
-    var expireDate = new Date();
-    expireDate.setDate(expireDate.getDate() + 1e4);
-    document.cookie = id + "-" + type + "=" + JSON.stringify(data) + "; expires=" + expireDate.toUTCString();
-  }
-};
-
-class Persistence extends Module {
-  constructor(table) {
-    super(table);
-    this.mode = "";
-    this.id = "";
-    this.defWatcherBlock = false;
-    this.config = {};
-    this.readFunc = false;
-    this.writeFunc = false;
-    this.registerTableOption("persistence", false);
-    this.registerTableOption("persistenceID", "");
-    this.registerTableOption("persistenceMode", true);
-    this.registerTableOption("persistenceReaderFunc", false);
-    this.registerTableOption("persistenceWriterFunc", false);
-  }
-  localStorageTest() {
-    var testKey = "_tabulator_test";
-    try {
-      window.localStorage.setItem(testKey, testKey);
-      window.localStorage.removeItem(testKey);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-  initialize() {
-    if (this.table.options.persistence) {
-      var mode = this.table.options.persistenceMode, id = this.table.options.persistenceID, retrievedData;
-      this.mode = mode !== true ? mode : this.localStorageTest() ? "local" : "cookie";
-      if (this.table.options.persistenceReaderFunc) {
-        if (typeof this.table.options.persistenceReaderFunc === "function") {
-          this.readFunc = this.table.options.persistenceReaderFunc;
-        } else {
-          if (Persistence.readers[this.table.options.persistenceReaderFunc]) {
-            this.readFunc = Persistence.readers[this.table.options.persistenceReaderFunc];
-          } else {
-            console.warn("Persistence Read Error - invalid reader set", this.table.options.persistenceReaderFunc);
-          }
-        }
-      } else {
-        if (Persistence.readers[this.mode]) {
-          this.readFunc = Persistence.readers[this.mode];
-        } else {
-          console.warn("Persistence Read Error - invalid reader set", this.mode);
-        }
-      }
-      if (this.table.options.persistenceWriterFunc) {
-        if (typeof this.table.options.persistenceWriterFunc === "function") {
-          this.writeFunc = this.table.options.persistenceWriterFunc;
-        } else {
-          if (Persistence.writers[this.table.options.persistenceWriterFunc]) {
-            this.writeFunc = Persistence.writers[this.table.options.persistenceWriterFunc];
-          } else {
-            console.warn("Persistence Write Error - invalid reader set", this.table.options.persistenceWriterFunc);
-          }
-        }
-      } else {
-        if (Persistence.writers[this.mode]) {
-          this.writeFunc = Persistence.writers[this.mode];
-        } else {
-          console.warn("Persistence Write Error - invalid writer set", this.mode);
-        }
-      }
-      this.id = "tabulator-" + (id || (this.table.element.getAttribute("id") || ""));
-      this.config = {
-        sort: this.table.options.persistence === true || this.table.options.persistence.sort,
-        filter: this.table.options.persistence === true || this.table.options.persistence.filter,
-        group: this.table.options.persistence === true || this.table.options.persistence.group,
-        page: this.table.options.persistence === true || this.table.options.persistence.page,
-        columns: this.table.options.persistence === true ? ["title", "width", "visible"] : this.table.options.persistence.columns
-      };
-      if (this.config.page) {
-        retrievedData = this.retrieveData("page");
-        if (retrievedData) {
-          if (typeof retrievedData.paginationSize !== "undefined" && (this.config.page === true || this.config.page.size)) {
-            this.table.options.paginationSize = retrievedData.paginationSize;
-          }
-          if (typeof retrievedData.paginationInitialPage !== "undefined" && (this.config.page === true || this.config.page.page)) {
-            this.table.options.paginationInitialPage = retrievedData.paginationInitialPage;
-          }
-        }
-      }
-      if (this.config.group) {
-        retrievedData = this.retrieveData("group");
-        if (retrievedData) {
-          if (typeof retrievedData.groupBy !== "undefined" && (this.config.group === true || this.config.group.groupBy)) {
-            this.table.options.groupBy = retrievedData.groupBy;
-          }
-          if (typeof retrievedData.groupStartOpen !== "undefined" && (this.config.group === true || this.config.group.groupStartOpen)) {
-            this.table.options.groupStartOpen = retrievedData.groupStartOpen;
-          }
-          if (typeof retrievedData.groupHeader !== "undefined" && (this.config.group === true || this.config.group.groupHeader)) {
-            this.table.options.groupHeader = retrievedData.groupHeader;
-          }
-        }
-      }
-      if (this.config.columns) {
-        this.table.options.columns = this.load("columns", this.table.options.columns);
-        this.subscribe("column-init", this.initializeColumn.bind(this));
-        this.subscribe("column-show", this.save.bind(this, "columns"));
-        this.subscribe("column-hide", this.save.bind(this, "columns"));
-        this.subscribe("column-moved", this.save.bind(this, "columns"));
-      }
-      this.subscribe("table-built", this.tableBuilt.bind(this), 0);
-      this.subscribe("table-redraw", this.tableRedraw.bind(this));
-      this.subscribe("filter-changed", this.eventSave.bind(this, "filter"));
-      this.subscribe("sort-changed", this.eventSave.bind(this, "sort"));
-      this.subscribe("group-changed", this.eventSave.bind(this, "group"));
-      this.subscribe("page-changed", this.eventSave.bind(this, "page"));
-      this.subscribe("column-resized", this.eventSave.bind(this, "columns"));
-      this.subscribe("column-width", this.eventSave.bind(this, "columns"));
-      this.subscribe("layout-refreshed", this.eventSave.bind(this, "columns"));
-    }
-    this.registerTableFunction("getColumnLayout", this.getColumnLayout.bind(this));
-    this.registerTableFunction("setColumnLayout", this.setColumnLayout.bind(this));
-  }
-  eventSave(type) {
-    if (this.config[type]) {
-      this.save(type);
-    }
-  }
-  tableBuilt() {
-    var sorters, filters;
-    if (this.config.sort) {
-      sorters = this.load("sort");
-      if (!sorters === false) {
-        this.table.options.initialSort = sorters;
-      }
-    }
-    if (this.config.filter) {
-      filters = this.load("filter");
-      if (!filters === false) {
-        this.table.options.initialFilter = filters;
-      }
-    }
-  }
-  tableRedraw(force) {
-    if (force && this.config.columns) {
-      this.save("columns");
-    }
-  }
-  getColumnLayout() {
-    return this.parseColumns(this.table.columnManager.getColumns());
-  }
-  setColumnLayout(layout) {
-    this.table.columnManager.setColumns(this.mergeDefinition(this.table.options.columns, layout));
-    return true;
-  }
-  initializeColumn(column) {
-    var def, keys;
-    if (this.config.columns) {
-      this.defWatcherBlock = true;
-      def = column.getDefinition();
-      keys = this.config.columns === true ? Object.keys(def) : this.config.columns;
-      keys.forEach((key) => {
-        var props = Object.getOwnPropertyDescriptor(def, key);
-        var value = def[key];
-        if (props) {
-          Object.defineProperty(def, key, {
-            set: (newValue) => {
-              value = newValue;
-              if (!this.defWatcherBlock) {
-                this.save("columns");
-              }
-              if (props.set) {
-                props.set(newValue);
-              }
-            },
-            get: () => {
-              if (props.get) {
-                props.get();
-              }
-              return value;
-            }
-          });
-        }
-      });
-      this.defWatcherBlock = false;
-    }
-  }
-  load(type, current) {
-    var data = this.retrieveData(type);
-    if (current) {
-      data = data ? this.mergeDefinition(current, data) : current;
-    }
-    return data;
-  }
-  retrieveData(type) {
-    return this.readFunc ? this.readFunc(this.id, type) : false;
-  }
-  mergeDefinition(oldCols, newCols) {
-    var output = [];
-    newCols = newCols || [];
-    newCols.forEach((column, to) => {
-      var from = this._findColumn(oldCols, column), keys;
-      if (from) {
-        if (this.config.columns === true || this.config.columns == void 0) {
-          keys = Object.keys(from);
-          keys.push("width");
-        } else {
-          keys = this.config.columns;
-        }
-        keys.forEach((key) => {
-          if (key !== "columns" && typeof column[key] !== "undefined") {
-            from[key] = column[key];
-          }
-        });
-        if (from.columns) {
-          from.columns = this.mergeDefinition(from.columns, column.columns);
-        }
-        output.push(from);
-      }
-    });
-    oldCols.forEach((column, i) => {
-      var from = this._findColumn(newCols, column);
-      if (!from) {
-        if (output.length > i) {
-          output.splice(i, 0, column);
-        } else {
-          output.push(column);
-        }
-      }
-    });
-    return output;
-  }
-  _findColumn(columns, subject) {
-    var type = subject.columns ? "group" : subject.field ? "field" : "object";
-    return columns.find(function(col) {
-      switch (type) {
-        case "group":
-          return col.title === subject.title && col.columns.length === subject.columns.length;
-        case "field":
-          return col.field === subject.field;
-        case "object":
-          return col === subject;
-      }
-    });
-  }
-  save(type) {
-    var data = {};
-    switch (type) {
-      case "columns":
-        data = this.parseColumns(this.table.columnManager.getColumns());
-        break;
-      case "filter":
-        data = this.table.modules.filter.getFilters();
-        break;
-      case "sort":
-        data = this.validateSorters(this.table.modules.sort.getSort());
-        break;
-      case "group":
-        data = this.getGroupConfig();
-        break;
-      case "page":
-        data = this.getPageConfig();
-        break;
-    }
-    if (this.writeFunc) {
-      this.writeFunc(this.id, type, data);
-    }
-  }
-  validateSorters(data) {
-    data.forEach(function(item) {
-      item.column = item.field;
-      delete item.field;
-    });
-    return data;
-  }
-  getGroupConfig() {
-    var data = {};
-    if (this.config.group) {
-      if (this.config.group === true || this.config.group.groupBy) {
-        data.groupBy = this.table.options.groupBy;
-      }
-      if (this.config.group === true || this.config.group.groupStartOpen) {
-        data.groupStartOpen = this.table.options.groupStartOpen;
-      }
-      if (this.config.group === true || this.config.group.groupHeader) {
-        data.groupHeader = this.table.options.groupHeader;
-      }
-    }
-    return data;
-  }
-  getPageConfig() {
-    var data = {};
-    if (this.config.page) {
-      if (this.config.page === true || this.config.page.size) {
-        data.paginationSize = this.table.modules.page.getPageSize();
-      }
-      if (this.config.page === true || this.config.page.page) {
-        data.paginationInitialPage = this.table.modules.page.getPage();
-      }
-    }
-    return data;
-  }
-  parseColumns(columns) {
-    var definitions = [], excludedKeys = ["headerContextMenu", "headerMenu", "contextMenu", "clickMenu"];
-    columns.forEach((column) => {
-      var defStore = {}, colDef = column.getDefinition(), keys;
-      if (column.isGroup) {
-        defStore.title = colDef.title;
-        defStore.columns = this.parseColumns(column.getColumns());
-      } else {
-        defStore.field = column.getField();
-        if (this.config.columns === true || this.config.columns == void 0) {
-          keys = Object.keys(colDef);
-          keys.push("width");
-          keys.push("visible");
-        } else {
-          keys = this.config.columns;
-        }
-        keys.forEach((key) => {
-          switch (key) {
-            case "width":
-              defStore.width = column.getWidth();
-              break;
-            case "visible":
-              defStore.visible = column.visible;
-              break;
-            default:
-              if (typeof colDef[key] !== "function" && excludedKeys.indexOf(key) === -1) {
-                defStore[key] = colDef[key];
-              }
-          }
-        });
-      }
-      definitions.push(defStore);
-    });
-    return definitions;
-  }
-}
-Persistence.moduleName = "persistence";
-Persistence.moduleInitOrder = -10;
-Persistence.readers = defaultReaders;
-Persistence.writers = defaultWriters;
-
-class Popup extends Module {
-  constructor(table) {
-    super(table);
-    this.columnSubscribers = {};
-    this.registerTableOption("rowContextPopup", false);
-    this.registerTableOption("rowClickPopup", false);
-    this.registerTableOption("rowDblClickPopup", false);
-    this.registerTableOption("groupContextPopup", false);
-    this.registerTableOption("groupClickPopup", false);
-    this.registerTableOption("groupDblClickPopup", false);
-    this.registerColumnOption("headerContextPopup");
-    this.registerColumnOption("headerClickPopup");
-    this.registerColumnOption("headerDblClickPopup");
-    this.registerColumnOption("headerPopup");
-    this.registerColumnOption("headerPopupIcon");
-    this.registerColumnOption("contextPopup");
-    this.registerColumnOption("clickPopup");
-    this.registerColumnOption("dblClickPopup");
-    this.registerComponentFunction("cell", "popup", this._componentPopupCall.bind(this));
-    this.registerComponentFunction("column", "popup", this._componentPopupCall.bind(this));
-    this.registerComponentFunction("row", "popup", this._componentPopupCall.bind(this));
-    this.registerComponentFunction("group", "popup", this._componentPopupCall.bind(this));
-  }
-  initialize() {
-    this.initializeRowWatchers();
-    this.initializeGroupWatchers();
-    this.subscribe("column-init", this.initializeColumn.bind(this));
-  }
-  _componentPopupCall(component, contents, position) {
-    this.loadPopupEvent(contents, null, component, position);
-  }
-  initializeRowWatchers() {
-    if (this.table.options.rowContextPopup) {
-      this.subscribe("row-contextmenu", this.loadPopupEvent.bind(this, this.table.options.rowContextPopup));
-      this.table.on("rowTapHold", this.loadPopupEvent.bind(this, this.table.options.rowContextPopup));
-    }
-    if (this.table.options.rowClickPopup) {
-      this.subscribe("row-click", this.loadPopupEvent.bind(this, this.table.options.rowClickPopup));
-    }
-    if (this.table.options.rowDblClickPopup) {
-      this.subscribe("row-dblclick", this.loadPopupEvent.bind(this, this.table.options.rowDblClickPopup));
-    }
-  }
-  initializeGroupWatchers() {
-    if (this.table.options.groupContextPopup) {
-      this.subscribe("group-contextmenu", this.loadPopupEvent.bind(this, this.table.options.groupContextPopup));
-      this.table.on("groupTapHold", this.loadPopupEvent.bind(this, this.table.options.groupContextPopup));
-    }
-    if (this.table.options.groupClickPopup) {
-      this.subscribe("group-click", this.loadPopupEvent.bind(this, this.table.options.groupClickPopup));
-    }
-    if (this.table.options.groupDblClickPopup) {
-      this.subscribe("group-dblclick", this.loadPopupEvent.bind(this, this.table.options.groupDblClickPopup));
-    }
-  }
-  initializeColumn(column) {
-    var def = column.definition;
-    if (def.headerContextPopup && !this.columnSubscribers.headerContextPopup) {
-      this.columnSubscribers.headerContextPopup = this.loadPopupTableColumnEvent.bind(this, "headerContextPopup");
-      this.subscribe("column-contextmenu", this.columnSubscribers.headerContextPopup);
-      this.table.on("headerTapHold", this.loadPopupTableColumnEvent.bind(this, "headerContextPopup"));
-    }
-    if (def.headerClickPopup && !this.columnSubscribers.headerClickPopup) {
-      this.columnSubscribers.headerClickPopup = this.loadPopupTableColumnEvent.bind(this, "headerClickPopup");
-      this.subscribe("column-click", this.columnSubscribers.headerClickPopup);
-    }
-    if (def.headerDblClickPopup && !this.columnSubscribers.headerDblClickPopup) {
-      this.columnSubscribers.headerDblClickPopup = this.loadPopupTableColumnEvent.bind(this, "headerDblClickPopup");
-      this.subscribe("column-dblclick", this.columnSubscribers.headerDblClickPopup);
-    }
-    if (def.headerPopup) {
-      this.initializeColumnHeaderPopup(column);
-    }
-    if (def.contextPopup && !this.columnSubscribers.contextPopup) {
-      this.columnSubscribers.contextPopup = this.loadPopupTableCellEvent.bind(this, "contextPopup");
-      this.subscribe("cell-contextmenu", this.columnSubscribers.contextPopup);
-      this.table.on("cellTapHold", this.loadPopupTableCellEvent.bind(this, "contextPopup"));
-    }
-    if (def.clickPopup && !this.columnSubscribers.clickPopup) {
-      this.columnSubscribers.clickPopup = this.loadPopupTableCellEvent.bind(this, "clickPopup");
-      this.subscribe("cell-click", this.columnSubscribers.clickPopup);
-    }
-    if (def.dblClickPopup && !this.columnSubscribers.dblClickPopup) {
-      this.columnSubscribers.dblClickPopup = this.loadPopupTableCellEvent.bind(this, "dblClickPopup");
-      this.subscribe("cell-click", this.columnSubscribers.dblClickPopup);
-    }
-  }
-  initializeColumnHeaderPopup(column) {
-    var icon = column.definition.headerPopupIcon, headerPopupEl;
-    headerPopupEl = document.createElement("span");
-    headerPopupEl.classList.add("tabulator-header-popup-button");
-    if (icon) {
-      if (typeof icon === "function") {
-        icon = icon(column.getComponent());
-      }
-      if (icon instanceof HTMLElement) {
-        headerPopupEl.appendChild(icon);
-      } else {
-        headerPopupEl.innerHTML = icon;
-      }
-    } else {
-      headerPopupEl.innerHTML = "&vellip;";
-    }
-    headerPopupEl.addEventListener("click", (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      this.loadPopupEvent(column.definition.headerPopup, e, column);
-    });
-    column.titleElement.insertBefore(headerPopupEl, column.titleElement.firstChild);
-  }
-  loadPopupTableCellEvent(option, e, cell) {
-    if (cell._cell) {
-      cell = cell._cell;
-    }
-    if (cell.column.definition[option]) {
-      this.loadPopupEvent(cell.column.definition[option], e, cell);
-    }
-  }
-  loadPopupTableColumnEvent(option, e, column) {
-    if (column._column) {
-      column = column._column;
-    }
-    if (column.definition[option]) {
-      this.loadPopupEvent(column.definition[option], e, column);
-    }
-  }
-  loadPopupEvent(contents, e, component, position) {
-    var renderedCallback;
-    function onRendered(callback) {
-      renderedCallback = callback;
-    }
-    if (component._group) {
-      component = component._group;
-    } else if (component._row) {
-      component = component._row;
-    }
-    contents = typeof contents == "function" ? contents.call(this.table, e, component.getComponent(), onRendered) : contents;
-    this.loadPopup(e, component, contents, renderedCallback, position);
-  }
-  loadPopup(e, component, contents, renderedCallback, position) {
-    var touch = !(e instanceof MouseEvent), contentsEl, popup;
-    if (contents instanceof HTMLElement) {
-      contentsEl = contents;
-    } else {
-      contentsEl = document.createElement("div");
-      contentsEl.innerHTML = contents;
-    }
-    contentsEl.classList.add("tabulator-popup");
-    contentsEl.addEventListener("click", (e2) => {
-      e2.stopPropagation();
-    });
-    if (!touch) {
-      e.preventDefault();
-    }
-    popup = this.popup(contentsEl);
-    if (typeof renderedCallback === "function") {
-      popup.renderCallback(renderedCallback);
-    }
-    if (e) {
-      popup.show(e);
-    } else {
-      popup.show(component.getElement(), position || "center");
-    }
-    popup.hideOnBlur(() => {
-      this.dispatchExternal("popupClosed", component.getComponent());
-    });
-    this.dispatchExternal("popupOpened", component.getComponent());
-  }
-}
-Popup.moduleName = "popup";
-
 class ResizeColumns extends Module {
   constructor(table) {
     super(table);
@@ -9948,457 +10076,6 @@ class ResizeColumns extends Module {
   }
 }
 ResizeColumns.moduleName = "resizeColumns";
-
-class ResizeRows extends Module {
-  constructor(table) {
-    super(table);
-    this.startColumn = false;
-    this.startY = false;
-    this.startHeight = false;
-    this.handle = null;
-    this.prevHandle = null;
-    this.registerTableOption("resizableRows", false);
-  }
-  initialize() {
-    if (this.table.options.resizableRows) {
-      this.subscribe("row-layout-after", this.initializeRow.bind(this));
-    }
-  }
-  initializeRow(row) {
-    var self = this, rowEl = row.getElement();
-    var handle = document.createElement("div");
-    handle.className = "tabulator-row-resize-handle";
-    var prevHandle = document.createElement("div");
-    prevHandle.className = "tabulator-row-resize-handle prev";
-    handle.addEventListener("click", function(e) {
-      e.stopPropagation();
-    });
-    var handleDown = function(e) {
-      self.startRow = row;
-      self._mouseDown(e, row, handle);
-    };
-    handle.addEventListener("mousedown", handleDown);
-    handle.addEventListener("touchstart", handleDown, { passive: true });
-    prevHandle.addEventListener("click", function(e) {
-      e.stopPropagation();
-    });
-    var prevHandleDown = function(e) {
-      var prevRow = self.table.rowManager.prevDisplayRow(row);
-      if (prevRow) {
-        self.startRow = prevRow;
-        self._mouseDown(e, prevRow, prevHandle);
-      }
-    };
-    prevHandle.addEventListener("mousedown", prevHandleDown);
-    prevHandle.addEventListener("touchstart", prevHandleDown, { passive: true });
-    rowEl.appendChild(handle);
-    rowEl.appendChild(prevHandle);
-  }
-  _mouseDown(e, row, handle) {
-    var self = this;
-    self.table.element.classList.add("tabulator-block-select");
-    function mouseMove(e2) {
-      row.setHeight(self.startHeight + ((typeof e2.screenY === "undefined" ? e2.touches[0].screenY : e2.screenY) - self.startY));
-    }
-    function mouseUp(e2) {
-      document.body.removeEventListener("mouseup", mouseMove);
-      document.body.removeEventListener("mousemove", mouseMove);
-      handle.removeEventListener("touchmove", mouseMove);
-      handle.removeEventListener("touchend", mouseUp);
-      self.table.element.classList.remove("tabulator-block-select");
-      self.dispatchExternal("rowResized", row.getComponent());
-    }
-    e.stopPropagation();
-    self.startY = typeof e.screenY === "undefined" ? e.touches[0].screenY : e.screenY;
-    self.startHeight = row.getHeight();
-    document.body.addEventListener("mousemove", mouseMove);
-    document.body.addEventListener("mouseup", mouseUp);
-    handle.addEventListener("touchmove", mouseMove, { passive: true });
-    handle.addEventListener("touchend", mouseUp);
-  }
-}
-ResizeRows.moduleName = "resizeRows";
-
-class ResizeTable extends Module {
-  constructor(table) {
-    super(table);
-    this.binding = false;
-    this.visibilityObserver = false;
-    this.resizeObserver = false;
-    this.containerObserver = false;
-    this.tableHeight = 0;
-    this.tableWidth = 0;
-    this.containerHeight = 0;
-    this.containerWidth = 0;
-    this.autoResize = false;
-    this.visible = false;
-    this.initialized = false;
-    this.initialRedraw = false;
-    this.registerTableOption("autoResize", true);
-  }
-  initialize() {
-    if (this.table.options.autoResize) {
-      var table = this.table, tableStyle;
-      this.tableHeight = table.element.clientHeight;
-      this.tableWidth = table.element.clientWidth;
-      if (table.element.parentNode) {
-        this.containerHeight = table.element.parentNode.clientHeight;
-        this.containerWidth = table.element.parentNode.clientWidth;
-      }
-      if (typeof IntersectionObserver !== "undefined" && typeof ResizeObserver !== "undefined" && table.rowManager.getRenderMode() === "virtual") {
-        this.initializeVisibilityObserver();
-        this.autoResize = true;
-        this.resizeObserver = new ResizeObserver((entry) => {
-          if (!table.browserMobile || table.browserMobile && !table.modules.edit.currentCell) {
-            var nodeHeight = Math.floor(entry[0].contentRect.height);
-            var nodeWidth = Math.floor(entry[0].contentRect.width);
-            if (this.tableHeight != nodeHeight || this.tableWidth != nodeWidth) {
-              this.tableHeight = nodeHeight;
-              this.tableWidth = nodeWidth;
-              if (table.element.parentNode) {
-                this.containerHeight = table.element.parentNode.clientHeight;
-                this.containerWidth = table.element.parentNode.clientWidth;
-              }
-              this.redrawTable();
-            }
-          }
-        });
-        this.resizeObserver.observe(table.element);
-        tableStyle = window.getComputedStyle(table.element);
-        if (this.table.element.parentNode && !this.table.rowManager.fixedHeight && (tableStyle.getPropertyValue("max-height") || tableStyle.getPropertyValue("min-height"))) {
-          this.containerObserver = new ResizeObserver((entry) => {
-            if (!table.browserMobile || table.browserMobile && !table.modules.edit.currentCell) {
-              var nodeHeight = Math.floor(entry[0].contentRect.height);
-              var nodeWidth = Math.floor(entry[0].contentRect.width);
-              if (this.containerHeight != nodeHeight || this.containerWidth != nodeWidth) {
-                this.containerHeight = nodeHeight;
-                this.containerWidth = nodeWidth;
-                this.tableHeight = table.element.clientHeight;
-                this.tableWidth = table.element.clientWidth;
-              }
-              this.redrawTable();
-            }
-          });
-          this.containerObserver.observe(this.table.element.parentNode);
-        }
-        this.subscribe("table-resize", this.tableResized.bind(this));
-      } else {
-        this.binding = function() {
-          if (!table.browserMobile || table.browserMobile && !table.modules.edit.currentCell) {
-            table.columnManager.rerenderColumns(true);
-            table.redraw();
-          }
-        };
-        window.addEventListener("resize", this.binding);
-      }
-      this.subscribe("table-destroy", this.clearBindings.bind(this));
-    }
-  }
-  initializeVisibilityObserver() {
-    this.visibilityObserver = new IntersectionObserver((entries) => {
-      this.visible = entries[0].isIntersecting;
-      if (!this.initialized) {
-        this.initialized = true;
-        this.initialRedraw = !this.visible;
-      } else {
-        if (this.visible) {
-          this.redrawTable(this.initialRedraw);
-          this.initialRedraw = false;
-        }
-      }
-    });
-    this.visibilityObserver.observe(this.table.element);
-  }
-  redrawTable(force) {
-    if (this.initialized && this.visible) {
-      this.table.columnManager.rerenderColumns(true);
-      this.table.redraw(force);
-    }
-  }
-  tableResized() {
-    this.table.rowManager.redraw();
-  }
-  clearBindings() {
-    if (this.binding) {
-      window.removeEventListener("resize", this.binding);
-    }
-    if (this.resizeObserver) {
-      this.resizeObserver.unobserve(this.table.element);
-    }
-    if (this.visibilityObserver) {
-      this.visibilityObserver.unobserve(this.table.element);
-    }
-    if (this.containerObserver) {
-      this.containerObserver.unobserve(this.table.element.parentNode);
-    }
-  }
-}
-ResizeTable.moduleName = "resizeTable";
-
-class ResponsiveLayout extends Module {
-  constructor(table) {
-    super(table);
-    this.columns = [];
-    this.hiddenColumns = [];
-    this.mode = "";
-    this.index = 0;
-    this.collapseFormatter = [];
-    this.collapseStartOpen = true;
-    this.collapseHandleColumn = false;
-    this.registerTableOption("responsiveLayout", false);
-    this.registerTableOption("responsiveLayoutCollapseStartOpen", true);
-    this.registerTableOption("responsiveLayoutCollapseUseFormatters", true);
-    this.registerTableOption("responsiveLayoutCollapseFormatter", false);
-    this.registerColumnOption("responsive");
-  }
-  initialize() {
-    if (this.table.options.responsiveLayout) {
-      this.subscribe("column-layout", this.initializeColumn.bind(this));
-      this.subscribe("column-show", this.updateColumnVisibility.bind(this));
-      this.subscribe("column-hide", this.updateColumnVisibility.bind(this));
-      this.subscribe("columns-loaded", this.initializeResponsivity.bind(this));
-      this.subscribe("column-moved", this.initializeResponsivity.bind(this));
-      this.subscribe("column-add", this.initializeResponsivity.bind(this));
-      this.subscribe("column-delete", this.initializeResponsivity.bind(this));
-      this.subscribe("table-redrawing", this.tableRedraw.bind(this));
-      if (this.table.options.responsiveLayout === "collapse") {
-        this.subscribe("row-data-changed", this.generateCollapsedRowContent.bind(this));
-        this.subscribe("row-init", this.initializeRow.bind(this));
-        this.subscribe("row-layout", this.layoutRow.bind(this));
-      }
-    }
-  }
-  tableRedraw(force) {
-    if (["fitColumns", "fitDataStretch"].indexOf(this.layoutMode()) === -1) {
-      if (!force) {
-        this.update();
-      }
-    }
-  }
-  initializeResponsivity() {
-    var columns = [];
-    this.mode = this.table.options.responsiveLayout;
-    this.collapseFormatter = this.table.options.responsiveLayoutCollapseFormatter || this.formatCollapsedData;
-    this.collapseStartOpen = this.table.options.responsiveLayoutCollapseStartOpen;
-    this.hiddenColumns = [];
-    this.table.columnManager.columnsByIndex.forEach((column, i) => {
-      if (column.modules.responsive) {
-        if (column.modules.responsive.order && column.modules.responsive.visible) {
-          column.modules.responsive.index = i;
-          columns.push(column);
-          if (!column.visible && this.mode === "collapse") {
-            this.hiddenColumns.push(column);
-          }
-        }
-      }
-    });
-    columns = columns.reverse();
-    columns = columns.sort((a, b) => {
-      var diff = b.modules.responsive.order - a.modules.responsive.order;
-      return diff || b.modules.responsive.index - a.modules.responsive.index;
-    });
-    this.columns = columns;
-    if (this.mode === "collapse") {
-      this.generateCollapsedContent();
-    }
-    for (let col of this.table.columnManager.columnsByIndex) {
-      if (col.definition.formatter == "responsiveCollapse") {
-        this.collapseHandleColumn = col;
-        break;
-      }
-    }
-    if (this.collapseHandleColumn) {
-      if (this.hiddenColumns.length) {
-        this.collapseHandleColumn.show();
-      } else {
-        this.collapseHandleColumn.hide();
-      }
-    }
-  }
-  initializeColumn(column) {
-    var def = column.getDefinition();
-    column.modules.responsive = { order: typeof def.responsive === "undefined" ? 1 : def.responsive, visible: def.visible === false ? false : true };
-  }
-  initializeRow(row) {
-    var el;
-    if (row.type !== "calc") {
-      el = document.createElement("div");
-      el.classList.add("tabulator-responsive-collapse");
-      row.modules.responsiveLayout = {
-        element: el,
-        open: this.collapseStartOpen
-      };
-      if (!this.collapseStartOpen) {
-        el.style.display = "none";
-      }
-    }
-  }
-  layoutRow(row) {
-    var rowEl = row.getElement();
-    if (row.modules.responsiveLayout) {
-      rowEl.appendChild(row.modules.responsiveLayout.element);
-      this.generateCollapsedRowContent(row);
-    }
-  }
-  updateColumnVisibility(column, responsiveToggle) {
-    if (!responsiveToggle && column.modules.responsive) {
-      column.modules.responsive.visible = column.visible;
-      this.initializeResponsivity();
-    }
-  }
-  hideColumn(column) {
-    var colCount = this.hiddenColumns.length;
-    column.hide(false, true);
-    if (this.mode === "collapse") {
-      this.hiddenColumns.unshift(column);
-      this.generateCollapsedContent();
-      if (this.collapseHandleColumn && !colCount) {
-        this.collapseHandleColumn.show();
-      }
-    }
-  }
-  showColumn(column) {
-    var index;
-    column.show(false, true);
-    column.setWidth(column.getWidth());
-    if (this.mode === "collapse") {
-      index = this.hiddenColumns.indexOf(column);
-      if (index > -1) {
-        this.hiddenColumns.splice(index, 1);
-      }
-      this.generateCollapsedContent();
-      if (this.collapseHandleColumn && !this.hiddenColumns.length) {
-        this.collapseHandleColumn.hide();
-      }
-    }
-  }
-  update() {
-    var working = true;
-    while (working) {
-      let width = this.table.modules.layout.getMode() == "fitColumns" ? this.table.columnManager.getFlexBaseWidth() : this.table.columnManager.getWidth();
-      let diff = (this.table.options.headerVisible ? this.table.columnManager.element.clientWidth : this.table.element.clientWidth) - width;
-      if (diff < 0) {
-        let column = this.columns[this.index];
-        if (column) {
-          this.hideColumn(column);
-          this.index++;
-        } else {
-          working = false;
-        }
-      } else {
-        let column = this.columns[this.index - 1];
-        if (column) {
-          if (diff > 0) {
-            if (diff >= column.getWidth()) {
-              this.showColumn(column);
-              this.index--;
-            } else {
-              working = false;
-            }
-          } else {
-            working = false;
-          }
-        } else {
-          working = false;
-        }
-      }
-      if (!this.table.rowManager.activeRowsCount) {
-        this.table.rowManager.renderEmptyScroll();
-      }
-    }
-  }
-  generateCollapsedContent() {
-    var rows = this.table.rowManager.getDisplayRows();
-    rows.forEach((row) => {
-      this.generateCollapsedRowContent(row);
-    });
-  }
-  generateCollapsedRowContent(row) {
-    var el, contents;
-    if (row.modules.responsiveLayout) {
-      el = row.modules.responsiveLayout.element;
-      while (el.firstChild)
-        el.removeChild(el.firstChild);
-      contents = this.collapseFormatter(this.generateCollapsedRowData(row));
-      if (contents) {
-        el.appendChild(contents);
-      }
-    }
-  }
-  generateCollapsedRowData(row) {
-    var data = row.getData(), output = [], mockCellComponent;
-    this.hiddenColumns.forEach((column) => {
-      var value = column.getFieldValue(data);
-      if (column.definition.title && column.field) {
-        if (column.modules.format && this.table.options.responsiveLayoutCollapseUseFormatters) {
-          let onRendered = function(callback) {
-            callback();
-          };
-          mockCellComponent = {
-            value: false,
-            data: {},
-            getValue: function() {
-              return value;
-            },
-            getData: function() {
-              return data;
-            },
-            getElement: function() {
-              return document.createElement("div");
-            },
-            getRow: function() {
-              return row.getComponent();
-            },
-            getColumn: function() {
-              return column.getComponent();
-            },
-            getTable: () => {
-              return this.table;
-            }
-          };
-          output.push({
-            field: column.field,
-            title: column.definition.title,
-            value: column.modules.format.formatter.call(this.table.modules.format, mockCellComponent, column.modules.format.params, onRendered)
-          });
-        } else {
-          output.push({
-            field: column.field,
-            title: column.definition.title,
-            value
-          });
-        }
-      }
-    });
-    return output;
-  }
-  formatCollapsedData(data) {
-    var list = document.createElement("table");
-    data.forEach(function(item) {
-      var row = document.createElement("tr");
-      var titleData = document.createElement("td");
-      var valueData = document.createElement("td");
-      var node_content;
-      var titleHighlight = document.createElement("strong");
-      titleData.appendChild(titleHighlight);
-      this.langBind("columns|" + item.field, function(text) {
-        titleHighlight.innerHTML = text || item.title;
-      });
-      if (item.value instanceof Node) {
-        node_content = document.createElement("div");
-        node_content.appendChild(item.value);
-        valueData.appendChild(node_content);
-      } else {
-        valueData.innerHTML = item.value;
-      }
-      row.appendChild(titleData);
-      row.appendChild(valueData);
-      list.appendChild(row);
-    }, this);
-    return Object.keys(data).length ? list : "";
-  }
-}
-ResponsiveLayout.moduleName = "responsiveLayout";
 
 class SelectRow extends Module {
   constructor(table) {
@@ -11264,3908 +10941,25 @@ class Sort extends Module {
 Sort.moduleName = "sort";
 Sort.sorters = defaultSorters;
 
-class Tooltip extends Module {
-  constructor(table) {
-    super(table);
-    this.tooltipSubscriber = null, this.headerSubscriber = null, this.timeout = null;
-    this.popupInstance = null;
-    this.registerTableOption("tooltipGenerationMode", void 0);
-    this.registerTableOption("tooltipDelay", 300);
-    this.registerColumnOption("tooltip");
-    this.registerColumnOption("headerTooltip");
-  }
-  initialize() {
-    this.deprecatedOptionsCheck();
-    this.subscribe("column-init", this.initializeColumn.bind(this));
-  }
-  deprecatedOptionsCheck() {
-    this.deprecationCheckMsg("tooltipGenerationMode", "This option is no longer needed as tooltips are always generated on hover now");
-  }
-  initializeColumn(column) {
-    if (column.definition.headerTooltip && !this.headerSubscriber) {
-      this.headerSubscriber = true;
-      this.subscribe("column-mousemove", this.mousemoveCheck.bind(this, "headerTooltip"));
-      this.subscribe("column-mouseout", this.mouseoutCheck.bind(this, "headerTooltip"));
-    }
-    if (column.definition.tooltip && !this.tooltipSubscriber) {
-      this.tooltipSubscriber = true;
-      this.subscribe("cell-mousemove", this.mousemoveCheck.bind(this, "tooltip"));
-      this.subscribe("cell-mouseout", this.mouseoutCheck.bind(this, "tooltip"));
-    }
-  }
-  mousemoveCheck(action, e, component) {
-    var tooltip = action === "tooltip" ? component.column.definition.tooltip : component.definition.headerTooltip;
-    if (tooltip) {
-      this.clearPopup();
-      this.timeout = setTimeout(this.loadTooltip.bind(this, e, component, tooltip), this.table.options.tooltipDelay);
-    }
-  }
-  mouseoutCheck(action, e, component) {
-    if (!this.popupInstance) {
-      this.clearPopup();
-    }
-  }
-  clearPopup(action, e, component) {
-    clearTimeout(this.timeout);
-    this.timeout = null;
-    if (this.popupInstance) {
-      this.popupInstance.hide();
-    }
-  }
-  loadTooltip(e, component, tooltip) {
-    var contentsEl, renderedCallback, coords;
-    function onRendered(callback) {
-      renderedCallback = callback;
-    }
-    if (typeof tooltip === "function") {
-      tooltip = tooltip(e, component.getComponent(), onRendered);
-    }
-    if (tooltip instanceof HTMLElement) {
-      contentsEl = tooltip;
-    } else {
-      contentsEl = document.createElement("div");
-      if (tooltip === true) {
-        if (component instanceof Cell) {
-          tooltip = component.value;
-        } else {
-          if (component.definition.field) {
-            this.langBind("columns|" + component.definition.field, (value) => {
-              contentsEl.innerHTML = tooltip = value || component.definition.title;
-            });
-          } else {
-            tooltip = component.definition.title;
-          }
-        }
-      }
-      contentsEl.innerHTML = tooltip;
-    }
-    if (tooltip || tooltip === 0 || tooltip === false) {
-      contentsEl.classList.add("tabulator-tooltip");
-      contentsEl.addEventListener("mousemove", (e2) => e2.preventDefault());
-      this.popupInstance = this.popup(contentsEl);
-      if (typeof renderedCallback === "function") {
-        this.popupInstance.renderCallback(renderedCallback);
-      }
-      coords = this.popupInstance.containerEventCoords(e);
-      this.popupInstance.show(coords.x + 15, coords.y + 15).hideOnBlur(() => {
-        this.dispatchExternal("TooltipClosed", component.getComponent());
-        this.popupInstance = null;
-      });
-      this.dispatchExternal("TooltipOpened", component.getComponent());
-    }
-  }
-}
-Tooltip.moduleName = "tooltip";
-
-var defaultValidators = {
-  integer: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    value = Number(value);
-    return !isNaN(value) && isFinite(value) && Math.floor(value) === value;
-  },
-  float: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    value = Number(value);
-    return !isNaN(value) && isFinite(value) && value % 1 !== 0;
-  },
-  numeric: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return !isNaN(value);
-  },
-  string: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return isNaN(value);
-  },
-  max: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return parseFloat(value) <= parameters;
-  },
-  min: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return parseFloat(value) >= parameters;
-  },
-  starts: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return String(value).toLowerCase().startsWith(String(parameters).toLowerCase());
-  },
-  ends: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return String(value).toLowerCase().endsWith(String(parameters).toLowerCase());
-  },
-  minLength: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return String(value).length >= parameters;
-  },
-  maxLength: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    return String(value).length <= parameters;
-  },
-  in: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    if (typeof parameters == "string") {
-      parameters = parameters.split("|");
-    }
-    return parameters.indexOf(value) > -1;
-  },
-  regex: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    var reg = new RegExp(parameters);
-    return reg.test(value);
-  },
-  unique: function(cell, value, parameters) {
-    if (value === "" || value === null || typeof value === "undefined") {
-      return true;
-    }
-    var unique = true;
-    var cellData = cell.getData();
-    var column = cell.getColumn()._getSelf();
-    this.table.rowManager.rows.forEach(function(row) {
-      var data = row.getData();
-      if (data !== cellData) {
-        if (value == column.getFieldValue(data)) {
-          unique = false;
-        }
-      }
-    });
-    return unique;
-  },
-  required: function(cell, value, parameters) {
-    return value !== "" && value !== null && typeof value !== "undefined";
-  }
-};
-
-class Validate extends Module {
-  constructor(table) {
-    super(table);
-    this.invalidCells = [];
-    this.registerTableOption("validationMode", "blocking");
-    this.registerColumnOption("validator");
-    this.registerTableFunction("getInvalidCells", this.getInvalidCells.bind(this));
-    this.registerTableFunction("clearCellValidation", this.userClearCellValidation.bind(this));
-    this.registerTableFunction("validate", this.userValidate.bind(this));
-    this.registerComponentFunction("cell", "isValid", this.cellIsValid.bind(this));
-    this.registerComponentFunction("cell", "clearValidation", this.clearValidation.bind(this));
-    this.registerComponentFunction("cell", "validate", this.cellValidate.bind(this));
-    this.registerComponentFunction("column", "validate", this.columnValidate.bind(this));
-    this.registerComponentFunction("row", "validate", this.rowValidate.bind(this));
-  }
-  initialize() {
-    this.subscribe("cell-delete", this.clearValidation.bind(this));
-    this.subscribe("column-layout", this.initializeColumnCheck.bind(this));
-    this.subscribe("edit-success", this.editValidate.bind(this));
-    this.subscribe("edit-editor-clear", this.editorClear.bind(this));
-    this.subscribe("edit-edited-clear", this.editedClear.bind(this));
-  }
-  editValidate(cell, value, previousValue) {
-    var valid = this.table.options.validationMode !== "manual" ? this.validate(cell.column.modules.validate, cell, value) : true;
-    if (valid !== true) {
-      setTimeout(() => {
-        cell.getElement().classList.add("tabulator-validation-fail");
-        this.dispatchExternal("validationFailed", cell.getComponent(), value, valid);
-      });
-    }
-    return valid;
-  }
-  editorClear(cell, cancelled) {
-    if (cancelled) {
-      if (cell.column.modules.validate) {
-        this.cellValidate(cell);
-      }
-    }
-    cell.getElement().classList.remove("tabulator-validation-fail");
-  }
-  editedClear(cell) {
-    if (cell.modules.validate) {
-      cell.modules.validate.invalid = false;
-    }
-  }
-  cellIsValid(cell) {
-    return cell.modules.validate ? cell.modules.validate.invalid || true : true;
-  }
-  cellValidate(cell) {
-    return this.validate(cell.column.modules.validate, cell, cell.getValue());
-  }
-  columnValidate(column) {
-    var invalid = [];
-    column.cells.forEach((cell) => {
-      if (this.cellValidate(cell) !== true) {
-        invalid.push(cell.getComponent());
-      }
-    });
-    return invalid.length ? invalid : true;
-  }
-  rowValidate(row) {
-    var invalid = [];
-    row.cells.forEach((cell) => {
-      if (this.cellValidate(cell) !== true) {
-        invalid.push(cell.getComponent());
-      }
-    });
-    return invalid.length ? invalid : true;
-  }
-  userClearCellValidation(cells) {
-    if (!cells) {
-      cells = this.getInvalidCells();
-    }
-    if (!Array.isArray(cells)) {
-      cells = [cells];
-    }
-    cells.forEach((cell) => {
-      this.clearValidation(cell._getSelf());
-    });
-  }
-  userValidate(cells) {
-    var output = [];
-    this.table.rowManager.rows.forEach((row) => {
-      row = row.getComponent();
-      var valid = row.validate();
-      if (valid !== true) {
-        output = output.concat(valid);
-      }
-    });
-    return output.length ? output : true;
-  }
-  initializeColumnCheck(column) {
-    if (typeof column.definition.validator !== "undefined") {
-      this.initializeColumn(column);
-    }
-  }
-  initializeColumn(column) {
-    var self = this, config = [], validator;
-    if (column.definition.validator) {
-      if (Array.isArray(column.definition.validator)) {
-        column.definition.validator.forEach((item) => {
-          validator = self._extractValidator(item);
-          if (validator) {
-            config.push(validator);
-          }
-        });
-      } else {
-        validator = this._extractValidator(column.definition.validator);
-        if (validator) {
-          config.push(validator);
-        }
-      }
-      column.modules.validate = config.length ? config : false;
-    }
-  }
-  _extractValidator(value) {
-    var type, params, pos;
-    switch (typeof value) {
-      case "string":
-        pos = value.indexOf(":");
-        if (pos > -1) {
-          type = value.substring(0, pos);
-          params = value.substring(pos + 1);
-        } else {
-          type = value;
-        }
-        return this._buildValidator(type, params);
-      case "function":
-        return this._buildValidator(value);
-      case "object":
-        return this._buildValidator(value.type, value.parameters);
-    }
-  }
-  _buildValidator(type, params) {
-    var func = typeof type == "function" ? type : Validate.validators[type];
-    if (!func) {
-      console.warn("Validator Setup Error - No matching validator found:", type);
-      return false;
-    } else {
-      return {
-        type: typeof type == "function" ? "function" : type,
-        func,
-        params
-      };
-    }
-  }
-  validate(validators, cell, value) {
-    var self = this, failedValidators = [], invalidIndex = this.invalidCells.indexOf(cell);
-    if (validators) {
-      validators.forEach((item) => {
-        if (!item.func.call(self, cell.getComponent(), value, item.params)) {
-          failedValidators.push({
-            type: item.type,
-            parameters: item.params
-          });
-        }
-      });
-    }
-    if (!cell.modules.validate) {
-      cell.modules.validate = {};
-    }
-    if (!failedValidators.length) {
-      cell.modules.validate.invalid = false;
-      cell.getElement().classList.remove("tabulator-validation-fail");
-      if (invalidIndex > -1) {
-        this.invalidCells.splice(invalidIndex, 1);
-      }
-    } else {
-      cell.modules.validate.invalid = failedValidators;
-      if (this.table.options.validationMode !== "manual") {
-        cell.getElement().classList.add("tabulator-validation-fail");
-      }
-      if (invalidIndex == -1) {
-        this.invalidCells.push(cell);
-      }
-    }
-    return failedValidators.length ? failedValidators : true;
-  }
-  getInvalidCells() {
-    var output = [];
-    this.invalidCells.forEach((cell) => {
-      output.push(cell.getComponent());
-    });
-    return output;
-  }
-  clearValidation(cell) {
-    var invalidIndex;
-    if (cell.modules.validate && cell.modules.validate.invalid) {
-      cell.getElement().classList.remove("tabulator-validation-fail");
-      cell.modules.validate.invalid = false;
-      invalidIndex = this.invalidCells.indexOf(cell);
-      if (invalidIndex > -1) {
-        this.invalidCells.splice(invalidIndex, 1);
-      }
-    }
-  }
-}
-Validate.moduleName = "validate";
-Validate.validators = defaultValidators;
-
-var modules = /*#__PURE__*/Object.freeze({
+var enabledModules = /*#__PURE__*/Object.freeze({
   __proto__: null,
-  AccessorModule: Accessor,
   ClipboardModule: Clipboard,
-  ColumnCalcsModule: ColumnCalcs,
   EditModule: Edit,
   FilterModule: Filter,
   FormatModule: Format,
   FrozenColumnsModule: FrozenColumns,
-  HistoryModule: History,
-  ImportModule: Import,
-  InteractionModule: Interaction,
   KeybindingsModule: Keybindings,
-  MenuModule: Menu,
   MoveColumnsModule: MoveColumns,
-  MoveRowsModule: MoveRows,
-  MutatorModule: Mutator,
-  PageModule: Page,
-  PersistenceModule: Persistence,
-  PopupModule: Popup,
   ResizeColumnsModule: ResizeColumns,
-  ResizeRowsModule: ResizeRows,
-  ResizeTableModule: ResizeTable,
-  ResponsiveLayoutModule: ResponsiveLayout,
   SelectRowModule: SelectRow,
-  SortModule: Sort,
-  TooltipModule: Tooltip,
-  ValidateModule: Validate
-});
-
-var defaultOptions = {
-  debugEventsExternal: false,
-  debugEventsInternal: false,
-  debugInvalidOptions: true,
-  debugInvalidComponentFuncs: true,
-  debugInitialization: true,
-  debugDeprecation: true,
-  height: false,
-  minHeight: false,
-  maxHeight: false,
-  columnHeaderVertAlign: "top",
-  popupContainer: false,
-  columns: [],
-  columnDefaults: {},
-  data: false,
-  autoColumns: false,
-  autoColumnsDefinitions: false,
-  nestedFieldSeparator: ".",
-  footerElement: false,
-  index: "id",
-  textDirection: "auto",
-  addRowPos: "bottom",
-  headerVisible: true,
-  renderVertical: "virtual",
-  renderHorizontal: "basic",
-  renderVerticalBuffer: 0,
-  scrollToRowPosition: "top",
-  scrollToRowIfVisible: true,
-  scrollToColumnPosition: "left",
-  scrollToColumnIfVisible: true,
-  rowFormatter: false,
-  rowFormatterPrint: null,
-  rowFormatterClipboard: null,
-  rowFormatterHtmlOutput: null,
-  rowHeight: null,
-  placeholder: false,
-  dataLoader: true,
-  dataLoaderLoading: false,
-  dataLoaderError: false,
-  dataLoaderErrorTimeout: 3e3,
-  dataSendParams: {},
-  dataReceiveParams: {}
-};
-
-class OptionsList {
-  constructor(table, msgType, defaults = {}) {
-    this.table = table;
-    this.msgType = msgType;
-    this.registeredDefaults = Object.assign({}, defaults);
-  }
-  register(option, value) {
-    this.registeredDefaults[option] = value;
-  }
-  generate(defaultOptions, userOptions = {}) {
-    var output = Object.assign({}, this.registeredDefaults);
-    Object.assign(output, defaultOptions);
-    if (userOptions.debugInvalidOptions !== false || this.table.options.debugInvalidOptions) {
-      for (let key in userOptions) {
-        if (!output.hasOwnProperty(key)) {
-          console.warn("Invalid " + this.msgType + " option:", key);
-        }
-      }
-    }
-    for (let key in output) {
-      if (key in userOptions) {
-        output[key] = userOptions[key];
-      } else {
-        if (Array.isArray(output[key])) {
-          output[key] = Object.assign([], output[key]);
-        } else if (typeof output[key] === "object" && output[key] !== null) {
-          output[key] = Object.assign({}, output[key]);
-        } else if (typeof output[key] === "undefined") {
-          delete output[key];
-        }
-      }
-    }
-    return output;
-  }
-}
-
-class Renderer extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.elementVertical = table.rowManager.element;
-    this.elementHorizontal = table.columnManager.element;
-    this.tableElement = table.rowManager.tableElement;
-    this.verticalFillMode = "fit";
-  }
-  initialize() {
-  }
-  clearRows() {
-  }
-  clearColumns() {
-  }
-  reinitializeColumnWidths(columns) {
-  }
-  renderRows() {
-  }
-  renderColumns() {
-  }
-  rerenderRows(callback) {
-    if (callback) {
-      callback();
-    }
-  }
-  rerenderColumns(update, blockRedraw) {
-  }
-  renderRowCells(row) {
-  }
-  rerenderRowCells(row, force) {
-  }
-  scrollColumns(left, dir) {
-  }
-  scrollRows(top, dir) {
-  }
-  resize() {
-  }
-  scrollToRow(row) {
-  }
-  scrollToRowNearestTop(row) {
-  }
-  visibleRows(includingBuffer) {
-    return [];
-  }
-  rows() {
-    return this.table.rowManager.getDisplayRows();
-  }
-  styleRow(row, index) {
-    var rowEl = row.getElement();
-    if (index % 2) {
-      rowEl.classList.add("tabulator-row-even");
-      rowEl.classList.remove("tabulator-row-odd");
-    } else {
-      rowEl.classList.add("tabulator-row-odd");
-      rowEl.classList.remove("tabulator-row-even");
-    }
-  }
-  clear() {
-    this.clearRows();
-    this.clearColumns();
-  }
-  render() {
-    this.renderRows();
-    this.renderColumns();
-  }
-  rerender(callback) {
-    this.rerenderRows();
-    this.rerenderColumns();
-  }
-  scrollToRowPosition(row, position, ifVisible) {
-    var rowIndex = this.rows().indexOf(row), rowEl = row.getElement(), offset = 0;
-    return new Promise((resolve, reject) => {
-      if (rowIndex > -1) {
-        if (typeof ifVisible === "undefined") {
-          ifVisible = this.table.options.scrollToRowIfVisible;
-        }
-        if (!ifVisible) {
-          if (Helpers.elVisible(rowEl)) {
-            offset = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top;
-            if (offset > 0 && offset < this.elementVertical.clientHeight - rowEl.offsetHeight) {
-              resolve();
-              return false;
-            }
-          }
-        }
-        if (typeof position === "undefined") {
-          position = this.table.options.scrollToRowPosition;
-        }
-        if (position === "nearest") {
-          position = this.scrollToRowNearestTop(row) ? "top" : "bottom";
-        }
-        this.scrollToRow(row);
-        switch (position) {
-          case "middle":
-          case "center":
-            if (this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight) {
-              this.elementVertical.scrollTop = this.elementVertical.scrollTop + (rowEl.offsetTop - this.elementVertical.scrollTop) - (this.elementVertical.scrollHeight - rowEl.offsetTop) / 2;
-            } else {
-              this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight / 2;
-            }
-            break;
-          case "bottom":
-            if (this.elementVertical.scrollHeight - this.elementVertical.scrollTop == this.elementVertical.clientHeight) {
-              this.elementVertical.scrollTop = this.elementVertical.scrollTop - (this.elementVertical.scrollHeight - rowEl.offsetTop) + rowEl.offsetHeight;
-            } else {
-              this.elementVertical.scrollTop = this.elementVertical.scrollTop - this.elementVertical.clientHeight + rowEl.offsetHeight;
-            }
-            break;
-          case "top":
-            this.elementVertical.scrollTop = rowEl.offsetTop;
-            break;
-        }
-        resolve();
-      } else {
-        console.warn("Scroll Error - Row not visible");
-        reject("Scroll Error - Row not visible");
-      }
-    });
-  }
-}
-
-class BasicHorizontal extends Renderer {
-  constructor(table) {
-    super(table);
-  }
-  renderRowCells(row) {
-    row.cells.forEach((cell) => {
-      row.element.appendChild(cell.getElement());
-      cell.cellRendered();
-    });
-  }
-  reinitializeColumnWidths(columns) {
-    columns.forEach(function(column) {
-      column.reinitializeWidth();
-    });
-  }
-}
-
-class VirtualDomHorizontal extends Renderer {
-  constructor(table) {
-    super(table);
-    this.leftCol = 0;
-    this.rightCol = 0;
-    this.scrollLeft = 0;
-    this.vDomScrollPosLeft = 0;
-    this.vDomScrollPosRight = 0;
-    this.vDomPadLeft = 0;
-    this.vDomPadRight = 0;
-    this.fitDataColAvg = 0;
-    this.windowBuffer = 200;
-    this.visibleRows = null;
-    this.initialized = false;
-    this.isFitData = false;
-    this.columns = [];
-  }
-  initialize() {
-    this.compatibilityCheck();
-    this.layoutCheck();
-    this.vertScrollListen();
-  }
-  compatibilityCheck() {
-    if (this.options("layout") == "fitDataTable") {
-      console.warn("Horizontal Virtual DOM is not compatible with fitDataTable layout mode");
-    }
-    if (this.options("responsiveLayout")) {
-      console.warn("Horizontal Virtual DOM is not compatible with responsive columns");
-    }
-    if (this.options("rtl")) {
-      console.warn("Horizontal Virtual DOM is not currently compatible with RTL text direction");
-    }
-  }
-  layoutCheck() {
-    this.isFitData = this.options("layout").startsWith("fitData");
-  }
-  vertScrollListen() {
-    this.subscribe("scroll-vertical", this.clearVisRowCache.bind(this));
-    this.subscribe("data-refreshed", this.clearVisRowCache.bind(this));
-  }
-  clearVisRowCache() {
-    this.visibleRows = null;
-  }
-  renderColumns(row, force) {
-    this.dataChange();
-  }
-  scrollColumns(left, dir) {
-    if (this.scrollLeft != left) {
-      this.scrollLeft = left;
-      this.scroll(left - (this.vDomScrollPosLeft + this.windowBuffer));
-    }
-  }
-  calcWindowBuffer() {
-    var buffer = this.elementVertical.clientWidth;
-    this.table.columnManager.columnsByIndex.forEach((column) => {
-      if (column.visible) {
-        var width = column.getWidth();
-        if (width > buffer) {
-          buffer = width;
-        }
-      }
-    });
-    this.windowBuffer = buffer * 2;
-  }
-  rerenderColumns(update, blockRedraw) {
-    var old = {
-      cols: this.columns,
-      leftCol: this.leftCol,
-      rightCol: this.rightCol
-    }, colPos = 0;
-    if (update && !this.initialized) {
-      return;
-    }
-    this.clear();
-    this.calcWindowBuffer();
-    this.scrollLeft = this.elementVertical.scrollLeft;
-    this.vDomScrollPosLeft = this.scrollLeft - this.windowBuffer;
-    this.vDomScrollPosRight = this.scrollLeft + this.elementVertical.clientWidth + this.windowBuffer;
-    this.table.columnManager.columnsByIndex.forEach((column) => {
-      var config = {}, width;
-      if (column.visible) {
-        if (!column.modules.frozen) {
-          width = column.getWidth();
-          config.leftPos = colPos;
-          config.rightPos = colPos + width;
-          config.width = width;
-          if (this.isFitData) {
-            config.fitDataCheck = column.modules.vdomHoz ? column.modules.vdomHoz.fitDataCheck : true;
-          }
-          if (colPos + width > this.vDomScrollPosLeft && colPos < this.vDomScrollPosRight) {
-            if (this.leftCol == -1) {
-              this.leftCol = this.columns.length;
-              this.vDomPadLeft = colPos;
-            }
-            this.rightCol = this.columns.length;
-          } else {
-            if (this.leftCol !== -1) {
-              this.vDomPadRight += width;
-            }
-          }
-          this.columns.push(column);
-          column.modules.vdomHoz = config;
-          colPos += width;
-        }
-      }
-    });
-    this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
-    this.tableElement.style.paddingRight = this.vDomPadRight + "px";
-    this.initialized = true;
-    if (!blockRedraw) {
-      if (!update || this.reinitChanged(old)) {
-        this.reinitializeRows();
-      }
-    }
-    this.elementVertical.scrollLeft = this.scrollLeft;
-  }
-  renderRowCells(row) {
-    if (this.initialized) {
-      this.initializeRow(row);
-    } else {
-      row.cells.forEach((cell) => {
-        row.element.appendChild(cell.getElement());
-        cell.cellRendered();
-      });
-    }
-  }
-  rerenderRowCells(row, force) {
-    this.reinitializeRow(row, force);
-  }
-  reinitializeColumnWidths(columns) {
-    for (let i = this.leftCol; i <= this.rightCol; i++) {
-      this.columns[i].reinitializeWidth();
-    }
-  }
-  deinitialize() {
-    this.initialized = false;
-  }
-  clear() {
-    this.columns = [];
-    this.leftCol = -1;
-    this.rightCol = 0;
-    this.vDomScrollPosLeft = 0;
-    this.vDomScrollPosRight = 0;
-    this.vDomPadLeft = 0;
-    this.vDomPadRight = 0;
-  }
-  dataChange() {
-    var change = false, row, rowEl;
-    if (this.isFitData) {
-      this.table.columnManager.columnsByIndex.forEach((column) => {
-        if (!column.definition.width && column.visible) {
-          change = true;
-        }
-      });
-      if (change && this.table.rowManager.getDisplayRows().length) {
-        this.vDomScrollPosRight = this.scrollLeft + this.elementVertical.clientWidth + this.windowBuffer;
-        row = this.chain("rows-sample", [1], [], () => {
-          return this.table.rowManager.getDisplayRows();
-        })[0];
-        if (row) {
-          rowEl = row.getElement();
-          row.generateCells();
-          this.tableElement.appendChild(rowEl);
-          for (let colEnd = 0; colEnd < row.cells.length; colEnd++) {
-            let cell = row.cells[colEnd];
-            rowEl.appendChild(cell.getElement());
-            cell.column.reinitializeWidth();
-          }
-          rowEl.parentNode.removeChild(rowEl);
-          this.rerenderColumns(false, true);
-        }
-      }
-    } else {
-      if (this.options("layout") === "fitColumns") {
-        this.layoutRefresh();
-        this.rerenderColumns(false, true);
-      }
-    }
-  }
-  reinitChanged(old) {
-    var match = true;
-    if (old.cols.length !== this.columns.length || old.leftCol !== this.leftCol || old.rightCol !== this.rightCol) {
-      return true;
-    }
-    old.cols.forEach((col, i) => {
-      if (col !== this.columns[i]) {
-        match = false;
-      }
-    });
-    return !match;
-  }
-  reinitializeRows() {
-    var visibleRows = this.getVisibleRows(), otherRows = this.table.rowManager.getRows().filter((row) => !visibleRows.includes(row));
-    visibleRows.forEach((row) => {
-      this.reinitializeRow(row, true);
-    });
-    otherRows.forEach((row) => {
-      row.deinitialize();
-    });
-  }
-  getVisibleRows() {
-    if (!this.visibleRows) {
-      this.visibleRows = this.table.rowManager.getVisibleRows();
-    }
-    return this.visibleRows;
-  }
-  scroll(diff) {
-    this.vDomScrollPosLeft += diff;
-    this.vDomScrollPosRight += diff;
-    if (Math.abs(diff) > this.windowBuffer / 2) {
-      this.rerenderColumns();
-    } else {
-      if (diff > 0) {
-        this.addColRight();
-        this.removeColLeft();
-      } else {
-        this.addColLeft();
-        this.removeColRight();
-      }
-    }
-  }
-  colPositionAdjust(start, end, diff) {
-    for (let i = start; i < end; i++) {
-      let column = this.columns[i];
-      column.modules.vdomHoz.leftPos += diff;
-      column.modules.vdomHoz.rightPos += diff;
-    }
-  }
-  addColRight() {
-    var changes = false, working = true;
-    while (working) {
-      let column = this.columns[this.rightCol + 1];
-      if (column) {
-        if (column.modules.vdomHoz.leftPos <= this.vDomScrollPosRight) {
-          changes = true;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              var cell = row.getCell(column);
-              row.getElement().insertBefore(cell.getElement(), row.getCell(this.columns[this.rightCol]).getElement().nextSibling);
-              cell.cellRendered();
-            }
-          });
-          this.fitDataColActualWidthCheck(column);
-          this.rightCol++;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              row.modules.vdomHoz.rightCol = this.rightCol;
-            }
-          });
-          if (this.rightCol >= this.columns.length - 1) {
-            this.vDomPadRight = 0;
-          } else {
-            this.vDomPadRight -= column.getWidth();
-          }
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    if (changes) {
-      this.tableElement.style.paddingRight = this.vDomPadRight + "px";
-    }
-  }
-  addColLeft() {
-    var changes = false, working = true;
-    while (working) {
-      let column = this.columns[this.leftCol - 1];
-      if (column) {
-        if (column.modules.vdomHoz.rightPos >= this.vDomScrollPosLeft) {
-          changes = true;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              var cell = row.getCell(column);
-              row.getElement().insertBefore(cell.getElement(), row.getCell(this.columns[this.leftCol]).getElement());
-              cell.cellRendered();
-            }
-          });
-          this.leftCol--;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              row.modules.vdomHoz.leftCol = this.leftCol;
-            }
-          });
-          if (this.leftCol <= 0) {
-            this.vDomPadLeft = 0;
-          } else {
-            this.vDomPadLeft -= column.getWidth();
-          }
-          let diff = this.fitDataColActualWidthCheck(column);
-          if (diff) {
-            this.scrollLeft = this.elementVertical.scrollLeft = this.elementVertical.scrollLeft + diff;
-            this.vDomPadRight -= diff;
-          }
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    if (changes) {
-      this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
-    }
-  }
-  removeColRight() {
-    var changes = false, working = true;
-    while (working) {
-      let column = this.columns[this.rightCol];
-      if (column) {
-        if (column.modules.vdomHoz.leftPos > this.vDomScrollPosRight) {
-          changes = true;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              var cell = row.getCell(column);
-              try {
-                row.getElement().removeChild(cell.getElement());
-              } catch (ex) {
-                console.warn("Could not removeColRight", ex.message);
-              }
-            }
-          });
-          this.vDomPadRight += column.getWidth();
-          this.rightCol--;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              row.modules.vdomHoz.rightCol = this.rightCol;
-            }
-          });
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    if (changes) {
-      this.tableElement.style.paddingRight = this.vDomPadRight + "px";
-    }
-  }
-  removeColLeft() {
-    var changes = false, working = true;
-    while (working) {
-      let column = this.columns[this.leftCol];
-      if (column) {
-        if (column.modules.vdomHoz.rightPos < this.vDomScrollPosLeft) {
-          changes = true;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              var cell = row.getCell(column);
-              try {
-                row.getElement().removeChild(cell.getElement());
-              } catch (ex) {
-                console.warn("Could not removeColLeft", ex.message);
-              }
-            }
-          });
-          this.vDomPadLeft += column.getWidth();
-          this.leftCol++;
-          this.getVisibleRows().forEach((row) => {
-            if (row.type !== "group") {
-              row.modules.vdomHoz.leftCol = this.leftCol;
-            }
-          });
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    if (changes) {
-      this.tableElement.style.paddingLeft = this.vDomPadLeft + "px";
-    }
-  }
-  fitDataColActualWidthCheck(column) {
-    var newWidth, widthDiff;
-    if (column.modules.vdomHoz.fitDataCheck) {
-      column.reinitializeWidth();
-      newWidth = column.getWidth();
-      widthDiff = newWidth - column.modules.vdomHoz.width;
-      if (widthDiff) {
-        column.modules.vdomHoz.rightPos += widthDiff;
-        column.modules.vdomHoz.width = newWidth;
-        this.colPositionAdjust(this.columns.indexOf(column) + 1, this.columns.length, widthDiff);
-      }
-      column.modules.vdomHoz.fitDataCheck = false;
-    }
-    return widthDiff;
-  }
-  initializeRow(row) {
-    if (row.type !== "group") {
-      row.modules.vdomHoz = {
-        leftCol: this.leftCol,
-        rightCol: this.rightCol
-      };
-      if (this.table.modules.frozenColumns) {
-        this.table.modules.frozenColumns.leftColumns.forEach((column) => {
-          this.appendCell(row, column);
-        });
-      }
-      for (let i = this.leftCol; i <= this.rightCol; i++) {
-        this.appendCell(row, this.columns[i]);
-      }
-      if (this.table.modules.frozenColumns) {
-        this.table.modules.frozenColumns.rightColumns.forEach((column) => {
-          this.appendCell(row, column);
-        });
-      }
-    }
-  }
-  appendCell(row, column) {
-    if (column && column.visible) {
-      let cell = row.getCell(column);
-      row.getElement().appendChild(cell.getElement());
-      cell.cellRendered();
-    }
-  }
-  reinitializeRow(row, force) {
-    if (row.type !== "group") {
-      if (force || !row.modules.vdomHoz || row.modules.vdomHoz.leftCol !== this.leftCol || row.modules.vdomHoz.rightCol !== this.rightCol) {
-        var rowEl = row.getElement();
-        while (rowEl.firstChild)
-          rowEl.removeChild(rowEl.firstChild);
-        this.initializeRow(row);
-      }
-    }
-  }
-}
-
-class ColumnManager extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.blockHozScrollEvent = false;
-    this.headersElement = null;
-    this.contentsElement = null;
-    this.element = null;
-    this.columns = [];
-    this.columnsByIndex = [];
-    this.columnsByField = {};
-    this.scrollLeft = 0;
-    this.optionsList = new OptionsList(this.table, "column definition", defaultColumnOptions);
-    this.redrawBlock = false;
-    this.redrawBlockUpdate = null;
-    this.renderer = null;
-  }
-  initialize() {
-    this.initializeRenderer();
-    this.headersElement = this.createHeadersElement();
-    this.contentsElement = this.createHeaderContentsElement();
-    this.element = this.createHeaderElement();
-    this.contentsElement.insertBefore(this.headersElement, this.contentsElement.firstChild);
-    this.element.insertBefore(this.contentsElement, this.element.firstChild);
-    this.subscribe("scroll-horizontal", this.scrollHorizontal.bind(this));
-    this.subscribe("scrollbar-vertical", this.padVerticalScrollbar.bind(this));
-  }
-  padVerticalScrollbar(width) {
-    if (this.table.rtl) {
-      this.headersElement.style.marginLeft = width + "px";
-    } else {
-      this.headersElement.style.marginRight = width + "px";
-    }
-  }
-  initializeRenderer() {
-    var renderClass;
-    var renderers = {
-      "virtual": VirtualDomHorizontal,
-      "basic": BasicHorizontal
-    };
-    if (typeof this.table.options.renderHorizontal === "string") {
-      renderClass = renderers[this.table.options.renderHorizontal];
-    } else {
-      renderClass = this.table.options.renderHorizontal;
-    }
-    if (renderClass) {
-      this.renderer = new renderClass(this.table, this.element, this.tableElement);
-      this.renderer.initialize();
-    } else {
-      console.error("Unable to find matching renderer:", this.table.options.renderHorizontal);
-    }
-  }
-  createHeadersElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-headers");
-    el.setAttribute("role", "row");
-    return el;
-  }
-  createHeaderContentsElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-header-contents");
-    el.setAttribute("role", "rowgroup");
-    return el;
-  }
-  createHeaderElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-header");
-    el.setAttribute("role", "rowgroup");
-    if (!this.table.options.headerVisible) {
-      el.classList.add("tabulator-header-hidden");
-    }
-    return el;
-  }
-  getElement() {
-    return this.element;
-  }
-  getContentsElement() {
-    return this.contentsElement;
-  }
-  getHeadersElement() {
-    return this.headersElement;
-  }
-  scrollHorizontal(left) {
-    this.contentsElement.scrollLeft = left;
-    this.scrollLeft = left;
-    this.renderer.scrollColumns(left);
-  }
-  generateColumnsFromRowData(data) {
-    var cols = [], definitions = this.table.options.autoColumnsDefinitions, row, sorter;
-    if (data && data.length) {
-      row = data[0];
-      for (var key in row) {
-        let col = {
-          field: key,
-          title: key
-        };
-        let value = row[key];
-        switch (typeof value) {
-          case "undefined":
-            sorter = "string";
-            break;
-          case "boolean":
-            sorter = "boolean";
-            break;
-          case "object":
-            if (Array.isArray(value)) {
-              sorter = "array";
-            } else {
-              sorter = "string";
-            }
-            break;
-          default:
-            if (!isNaN(value) && value !== "") {
-              sorter = "number";
-            } else {
-              if (value.match(/((^[0-9]+[a-z]+)|(^[a-z]+[0-9]+))+$/i)) {
-                sorter = "alphanum";
-              } else {
-                sorter = "string";
-              }
-            }
-            break;
-        }
-        col.sorter = sorter;
-        cols.push(col);
-      }
-      if (definitions) {
-        switch (typeof definitions) {
-          case "function":
-            this.table.options.columns = definitions.call(this.table, cols);
-            break;
-          case "object":
-            if (Array.isArray(definitions)) {
-              cols.forEach((col) => {
-                var match = definitions.find((def) => {
-                  return def.field === col.field;
-                });
-                if (match) {
-                  Object.assign(col, match);
-                }
-              });
-            } else {
-              cols.forEach((col) => {
-                if (definitions[col.field]) {
-                  Object.assign(col, definitions[col.field]);
-                }
-              });
-            }
-            this.table.options.columns = cols;
-            break;
-        }
-      } else {
-        this.table.options.columns = cols;
-      }
-      this.setColumns(this.table.options.columns);
-    }
-  }
-  setColumns(cols, row) {
-    while (this.headersElement.firstChild)
-      this.headersElement.removeChild(this.headersElement.firstChild);
-    this.columns = [];
-    this.columnsByIndex = [];
-    this.columnsByField = {};
-    this.dispatch("columns-loading");
-    cols.forEach((def, i) => {
-      this._addColumn(def);
-    });
-    this._reIndexColumns();
-    this.dispatch("columns-loaded");
-    this.rerenderColumns(false, true);
-    this.redraw(true);
-  }
-  _addColumn(definition, before, nextToColumn) {
-    var column = new Column(definition, this), colEl = column.getElement(), index = nextToColumn ? this.findColumnIndex(nextToColumn) : nextToColumn;
-    if (nextToColumn && index > -1) {
-      var topColumn = nextToColumn.getTopColumn();
-      var parentIndex = this.columns.indexOf(topColumn);
-      var nextEl = topColumn.getElement();
-      if (before) {
-        this.columns.splice(parentIndex, 0, column);
-        nextEl.parentNode.insertBefore(colEl, nextEl);
-      } else {
-        this.columns.splice(parentIndex + 1, 0, column);
-        nextEl.parentNode.insertBefore(colEl, nextEl.nextSibling);
-      }
-    } else {
-      if (before) {
-        this.columns.unshift(column);
-        this.headersElement.insertBefore(column.getElement(), this.headersElement.firstChild);
-      } else {
-        this.columns.push(column);
-        this.headersElement.appendChild(column.getElement());
-      }
-    }
-    column.columnRendered();
-    return column;
-  }
-  registerColumnField(col) {
-    if (col.definition.field) {
-      this.columnsByField[col.definition.field] = col;
-    }
-  }
-  registerColumnPosition(col) {
-    this.columnsByIndex.push(col);
-  }
-  _reIndexColumns() {
-    this.columnsByIndex = [];
-    this.columns.forEach(function(column) {
-      column.reRegisterPosition();
-    });
-  }
-  verticalAlignHeaders() {
-    var minHeight = 0;
-    if (!this.redrawBlock) {
-      this.headersElement.style.height = "";
-      this.columns.forEach((column) => {
-        column.clearVerticalAlign();
-      });
-      this.columns.forEach((column) => {
-        var height = column.getHeight();
-        if (height > minHeight) {
-          minHeight = height;
-        }
-      });
-      this.headersElement.style.height = minHeight + "px";
-      this.columns.forEach((column) => {
-        column.verticalAlign(this.table.options.columnHeaderVertAlign, minHeight);
-      });
-      this.table.rowManager.adjustTableSize();
-    }
-  }
-  findColumn(subject) {
-    var columns;
-    if (typeof subject == "object") {
-      if (subject instanceof Column) {
-        return subject;
-      } else if (subject instanceof ColumnComponent) {
-        return subject._getSelf() || false;
-      } else if (typeof HTMLElement !== "undefined" && subject instanceof HTMLElement) {
-        columns = [];
-        this.columns.forEach((column) => {
-          columns.push(column);
-          columns = columns.concat(column.getColumns(true));
-        });
-        let match = columns.find((column) => {
-          return column.element === subject;
-        });
-        return match || false;
-      }
-    } else {
-      return this.columnsByField[subject] || false;
-    }
-    return false;
-  }
-  getColumnByField(field) {
-    return this.columnsByField[field];
-  }
-  getColumnsByFieldRoot(root) {
-    var matches = [];
-    Object.keys(this.columnsByField).forEach((field) => {
-      var fieldRoot = field.split(".")[0];
-      if (fieldRoot === root) {
-        matches.push(this.columnsByField[field]);
-      }
-    });
-    return matches;
-  }
-  getColumnByIndex(index) {
-    return this.columnsByIndex[index];
-  }
-  getFirstVisibleColumn() {
-    var index = this.columnsByIndex.findIndex((col) => {
-      return col.visible;
-    });
-    return index > -1 ? this.columnsByIndex[index] : false;
-  }
-  getColumns() {
-    return this.columns;
-  }
-  findColumnIndex(column) {
-    return this.columnsByIndex.findIndex((col) => {
-      return column === col;
-    });
-  }
-  getRealColumns() {
-    return this.columnsByIndex;
-  }
-  traverse(callback) {
-    this.columnsByIndex.forEach((column, i) => {
-      callback(column, i);
-    });
-  }
-  getDefinitions(active) {
-    var output = [];
-    this.columnsByIndex.forEach((column) => {
-      if (!active || active && column.visible) {
-        output.push(column.getDefinition());
-      }
-    });
-    return output;
-  }
-  getDefinitionTree() {
-    var output = [];
-    this.columns.forEach((column) => {
-      output.push(column.getDefinition(true));
-    });
-    return output;
-  }
-  getComponents(structured) {
-    var output = [], columns = structured ? this.columns : this.columnsByIndex;
-    columns.forEach((column) => {
-      output.push(column.getComponent());
-    });
-    return output;
-  }
-  getWidth() {
-    var width = 0;
-    this.columnsByIndex.forEach((column) => {
-      if (column.visible) {
-        width += column.getWidth();
-      }
-    });
-    return width;
-  }
-  moveColumn(from, to, after) {
-    to.element.parentNode.insertBefore(from.element, to.element);
-    if (after) {
-      to.element.parentNode.insertBefore(to.element, from.element);
-    }
-    this.moveColumnActual(from, to, after);
-    this.verticalAlignHeaders();
-    this.table.rowManager.reinitialize();
-  }
-  moveColumnActual(from, to, after) {
-    if (from.parent.isGroup) {
-      this._moveColumnInArray(from.parent.columns, from, to, after);
-    } else {
-      this._moveColumnInArray(this.columns, from, to, after);
-    }
-    this._moveColumnInArray(this.columnsByIndex, from, to, after, true);
-    this.rerenderColumns(true);
-    this.dispatch("column-moved", from, to, after);
-    if (this.subscribedExternal("columnMoved")) {
-      this.dispatchExternal("columnMoved", from.getComponent(), this.table.columnManager.getComponents());
-    }
-  }
-  _moveColumnInArray(columns, from, to, after, updateRows) {
-    var fromIndex = columns.indexOf(from), toIndex, rows = [];
-    if (fromIndex > -1) {
-      columns.splice(fromIndex, 1);
-      toIndex = columns.indexOf(to);
-      if (toIndex > -1) {
-        if (after) {
-          toIndex = toIndex + 1;
-        }
-      } else {
-        toIndex = fromIndex;
-      }
-      columns.splice(toIndex, 0, from);
-      if (updateRows) {
-        rows = this.chain("column-moving-rows", [from, to, after], null, []) || [];
-        rows = rows.concat(this.table.rowManager.rows);
-        rows.forEach(function(row) {
-          if (row.cells.length) {
-            var cell = row.cells.splice(fromIndex, 1)[0];
-            row.cells.splice(toIndex, 0, cell);
-          }
-        });
-      }
-    }
-  }
-  scrollToColumn(column, position, ifVisible) {
-    var left = 0, offset = column.getLeftOffset(), adjust = 0, colEl = column.getElement();
-    return new Promise((resolve, reject) => {
-      if (typeof position === "undefined") {
-        position = this.table.options.scrollToColumnPosition;
-      }
-      if (typeof ifVisible === "undefined") {
-        ifVisible = this.table.options.scrollToColumnIfVisible;
-      }
-      if (column.visible) {
-        switch (position) {
-          case "middle":
-          case "center":
-            adjust = -this.element.clientWidth / 2;
-            break;
-          case "right":
-            adjust = colEl.clientWidth - this.headersElement.clientWidth;
-            break;
-        }
-        if (!ifVisible) {
-          if (offset > 0 && offset + colEl.offsetWidth < this.element.clientWidth) {
-            return false;
-          }
-        }
-        left = offset + adjust;
-        left = Math.max(Math.min(left, this.table.rowManager.element.scrollWidth - this.table.rowManager.element.clientWidth), 0);
-        this.table.rowManager.scrollHorizontal(left);
-        this.scrollHorizontal(left);
-        resolve();
-      } else {
-        console.warn("Scroll Error - Column not visible");
-        reject("Scroll Error - Column not visible");
-      }
-    });
-  }
-  generateCells(row) {
-    var cells = [];
-    this.columnsByIndex.forEach((column) => {
-      cells.push(column.generateCell(row));
-    });
-    return cells;
-  }
-  getFlexBaseWidth() {
-    var totalWidth = this.table.element.clientWidth, fixedWidth = 0;
-    if (this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight) {
-      totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
-    }
-    this.columnsByIndex.forEach(function(column) {
-      var width, minWidth, colWidth;
-      if (column.visible) {
-        width = column.definition.width || 0;
-        minWidth = parseInt(column.minWidth);
-        if (typeof width == "string") {
-          if (width.indexOf("%") > -1) {
-            colWidth = totalWidth / 100 * parseInt(width);
-          } else {
-            colWidth = parseInt(width);
-          }
-        } else {
-          colWidth = width;
-        }
-        fixedWidth += colWidth > minWidth ? colWidth : minWidth;
-      }
-    });
-    return fixedWidth;
-  }
-  addColumn(definition, before, nextToColumn) {
-    return new Promise((resolve, reject) => {
-      var column = this._addColumn(definition, before, nextToColumn);
-      this._reIndexColumns();
-      this.dispatch("column-add", definition, before, nextToColumn);
-      if (this.layoutMode() != "fitColumns") {
-        column.reinitializeWidth();
-      }
-      this.redraw(true);
-      this.table.rowManager.reinitialize();
-      this.rerenderColumns();
-      resolve(column);
-    });
-  }
-  deregisterColumn(column) {
-    var field = column.getField(), index;
-    if (field) {
-      delete this.columnsByField[field];
-    }
-    index = this.columnsByIndex.indexOf(column);
-    if (index > -1) {
-      this.columnsByIndex.splice(index, 1);
-    }
-    index = this.columns.indexOf(column);
-    if (index > -1) {
-      this.columns.splice(index, 1);
-    }
-    this.verticalAlignHeaders();
-    this.redraw();
-  }
-  rerenderColumns(update, silent) {
-    if (!this.redrawBlock) {
-      this.renderer.rerenderColumns(update, silent);
-    } else {
-      if (update === false || update === true && this.redrawBlockUpdate === null) {
-        this.redrawBlockUpdate = update;
-      }
-    }
-  }
-  blockRedraw() {
-    this.redrawBlock = true;
-    this.redrawBlockUpdate = null;
-  }
-  restoreRedraw() {
-    this.redrawBlock = false;
-    this.verticalAlignHeaders();
-    this.renderer.rerenderColumns(this.redrawBlockUpdate);
-  }
-  redraw(force) {
-    if (Helpers.elVisible(this.element)) {
-      this.verticalAlignHeaders();
-    }
-    if (force) {
-      this.table.rowManager.resetScroll();
-      this.table.rowManager.reinitialize();
-    }
-    if (!this.confirm("table-redrawing", force)) {
-      this.layoutRefresh(force);
-    }
-    this.dispatch("table-redraw", force);
-    this.table.footerManager.redraw();
-  }
-}
-
-class BasicVertical extends Renderer {
-  constructor(table) {
-    super(table);
-    this.verticalFillMode = "fill";
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-  }
-  clearRows() {
-    var element = this.tableElement;
-    while (element.firstChild)
-      element.removeChild(element.firstChild);
-    element.scrollTop = 0;
-    element.scrollLeft = 0;
-    element.style.minWidth = "";
-    element.style.minHeight = "";
-    element.style.display = "";
-    element.style.visibility = "";
-  }
-  renderRows() {
-    var element = this.tableElement, onlyGroupHeaders = true;
-    this.rows().forEach((row, index) => {
-      this.styleRow(row, index);
-      element.appendChild(row.getElement());
-      row.initialize(true);
-      if (row.type !== "group") {
-        onlyGroupHeaders = false;
-      }
-    });
-    if (onlyGroupHeaders) {
-      element.style.minWidth = this.table.columnManager.getWidth() + "px";
-    } else {
-      element.style.minWidth = "";
-    }
-  }
-  rerenderRows(callback) {
-    this.clearRows();
-    this.renderRows();
-    if (callback) {
-      callback();
-    }
-  }
-  scrollToRowNearestTop(row) {
-    var rowTop = Helpers.elOffset(row.getElement()).top;
-    return !(Math.abs(this.elementVertical.scrollTop - rowTop) > Math.abs(this.elementVertical.scrollTop + this.elementVertical.clientHeight - rowTop));
-  }
-  scrollToRow(row) {
-    var rowEl = row.getElement();
-    this.elementVertical.scrollTop = Helpers.elOffset(rowEl).top - Helpers.elOffset(this.elementVertical).top + this.elementVertical.scrollTop;
-  }
-  visibleRows(includingBuffer) {
-    return this.rows();
-  }
-}
-
-class VirtualDomVertical extends Renderer {
-  constructor(table) {
-    super(table);
-    this.verticalFillMode = "fill";
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-    this.vDomRowHeight = 20;
-    this.vDomTop = 0;
-    this.vDomBottom = 0;
-    this.vDomScrollPosTop = 0;
-    this.vDomScrollPosBottom = 0;
-    this.vDomTopPad = 0;
-    this.vDomBottomPad = 0;
-    this.vDomMaxRenderChain = 90;
-    this.vDomWindowBuffer = 0;
-    this.vDomWindowMinTotalRows = 20;
-    this.vDomWindowMinMarginRows = 5;
-    this.vDomTopNewRows = [];
-    this.vDomBottomNewRows = [];
-  }
-  clearRows() {
-    var element = this.tableElement;
-    while (element.firstChild)
-      element.removeChild(element.firstChild);
-    element.style.paddingTop = "";
-    element.style.paddingBottom = "";
-    element.style.minHeight = "";
-    element.style.display = "";
-    element.style.visibility = "";
-    this.elementVertical.scrollTop = 0;
-    this.elementVertical.scrollLeft = 0;
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-    this.vDomTop = 0;
-    this.vDomBottom = 0;
-    this.vDomTopPad = 0;
-    this.vDomBottomPad = 0;
-    this.vDomScrollPosTop = 0;
-    this.vDomScrollPosBottom = 0;
-  }
-  renderRows() {
-    this._virtualRenderFill();
-  }
-  rerenderRows(callback) {
-    var scrollTop = this.elementVertical.scrollTop;
-    var topRow = false;
-    var topOffset = false;
-    var left = this.table.rowManager.scrollLeft;
-    var rows = this.rows();
-    for (var i = this.vDomTop; i <= this.vDomBottom; i++) {
-      if (rows[i]) {
-        var diff = scrollTop - rows[i].getElement().offsetTop;
-        if (topOffset === false || Math.abs(diff) < topOffset) {
-          topOffset = diff;
-          topRow = i;
-        } else {
-          break;
-        }
-      }
-    }
-    rows.forEach((row) => {
-      row.deinitializeHeight();
-    });
-    if (callback) {
-      callback();
-    }
-    if (this.rows().length) {
-      this._virtualRenderFill(topRow === false ? this.rows.length - 1 : topRow, true, topOffset || 0);
-    } else {
-      this.clear();
-      this.table.rowManager._showPlaceholder();
-    }
-    this.scrollColumns(left);
-  }
-  scrollColumns(left) {
-    this.table.rowManager.scrollHorizontal(left);
-  }
-  scrollRows(top, dir) {
-    var topDiff = top - this.vDomScrollPosTop;
-    var bottomDiff = top - this.vDomScrollPosBottom;
-    var margin = this.vDomWindowBuffer * 2;
-    var rows = this.rows();
-    this.scrollTop = top;
-    if (-topDiff > margin || bottomDiff > margin) {
-      var left = this.table.rowManager.scrollLeft;
-      this._virtualRenderFill(Math.floor(this.elementVertical.scrollTop / this.elementVertical.scrollHeight * rows.length));
-      this.scrollColumns(left);
-    } else {
-      if (dir) {
-        if (topDiff < 0) {
-          this._addTopRow(rows, -topDiff);
-        }
-        if (bottomDiff < 0) {
-          if (this.vDomScrollHeight - this.scrollTop > this.vDomWindowBuffer) {
-            this._removeBottomRow(rows, -bottomDiff);
-          } else {
-            this.vDomScrollPosBottom = this.scrollTop;
-          }
-        }
-      } else {
-        if (bottomDiff >= 0) {
-          this._addBottomRow(rows, bottomDiff);
-        }
-        if (topDiff >= 0) {
-          if (this.scrollTop > this.vDomWindowBuffer) {
-            this._removeTopRow(rows, topDiff);
-          } else {
-            this.vDomScrollPosTop = this.scrollTop;
-          }
-        }
-      }
-    }
-  }
-  resize() {
-    this.vDomWindowBuffer = this.table.options.renderVerticalBuffer || this.elementVertical.clientHeight;
-  }
-  scrollToRowNearestTop(row) {
-    var rowIndex = this.rows().indexOf(row);
-    return !(Math.abs(this.vDomTop - rowIndex) > Math.abs(this.vDomBottom - rowIndex));
-  }
-  scrollToRow(row) {
-    var index = this.rows().indexOf(row);
-    if (index > -1) {
-      this._virtualRenderFill(index, true);
-    }
-  }
-  visibleRows(includingBuffer) {
-    var topEdge = this.elementVertical.scrollTop, bottomEdge = this.elementVertical.clientHeight + topEdge, topFound = false, topRow = 0, bottomRow = 0, rows = this.rows();
-    if (includingBuffer) {
-      topRow = this.vDomTop;
-      bottomRow = this.vDomBottom;
-    } else {
-      for (var i = this.vDomTop; i <= this.vDomBottom; i++) {
-        if (rows[i]) {
-          if (!topFound) {
-            if (topEdge - rows[i].getElement().offsetTop >= 0) {
-              topRow = i;
-            } else {
-              topFound = true;
-              if (bottomEdge - rows[i].getElement().offsetTop >= 0) {
-                bottomRow = i;
-              } else {
-                break;
-              }
-            }
-          } else {
-            if (bottomEdge - rows[i].getElement().offsetTop >= 0) {
-              bottomRow = i;
-            } else {
-              break;
-            }
-          }
-        }
-      }
-    }
-    return rows.slice(topRow, bottomRow + 1);
-  }
-  _virtualRenderFill(position, forceMove, offset) {
-    var element = this.tableElement, holder = this.elementVertical, topPad = 0, rowsHeight = 0, heightOccupied = 0, topPadHeight = 0, i = 0, rows = this.rows(), rowsCount = rows.length, containerHeight = this.elementVertical.clientHeight;
-    position = position || 0;
-    offset = offset || 0;
-    if (!position) {
-      this.clear();
-    } else {
-      while (element.firstChild)
-        element.removeChild(element.firstChild);
-      heightOccupied = (rowsCount - position + 1) * this.vDomRowHeight;
-      if (heightOccupied < containerHeight) {
-        position -= Math.ceil((containerHeight - heightOccupied) / this.vDomRowHeight);
-        if (position < 0) {
-          position = 0;
-        }
-      }
-      topPad = Math.min(Math.max(Math.floor(this.vDomWindowBuffer / this.vDomRowHeight), this.vDomWindowMinMarginRows), position);
-      position -= topPad;
-    }
-    if (rowsCount && Helpers.elVisible(this.elementVertical)) {
-      this.vDomTop = position;
-      this.vDomBottom = position - 1;
-      while ((rowsHeight <= containerHeight + this.vDomWindowBuffer || i < this.vDomWindowMinTotalRows) && this.vDomBottom < rowsCount - 1) {
-        var index = this.vDomBottom + 1, row = rows[index], rowHeight = 0;
-        this.styleRow(row, index);
-        element.appendChild(row.getElement());
-        row.initialize();
-        if (!row.heightInitialized) {
-          row.normalizeHeight(true);
-        }
-        rowHeight = row.getHeight();
-        if (i < topPad) {
-          topPadHeight += rowHeight;
-        } else {
-          rowsHeight += rowHeight;
-        }
-        if (rowHeight > this.vDomWindowBuffer) {
-          this.vDomWindowBuffer = rowHeight * 2;
-        }
-        this.vDomBottom++;
-        i++;
-      }
-      if (!position) {
-        this.vDomTopPad = 0;
-        this.vDomRowHeight = Math.floor((rowsHeight + topPadHeight) / i);
-        this.vDomBottomPad = this.vDomRowHeight * (rowsCount - this.vDomBottom - 1);
-        this.vDomScrollHeight = topPadHeight + rowsHeight + this.vDomBottomPad - containerHeight;
-      } else {
-        this.vDomTopPad = !forceMove ? this.scrollTop - topPadHeight : this.vDomRowHeight * this.vDomTop + offset;
-        this.vDomBottomPad = this.vDomBottom == rowsCount - 1 ? 0 : Math.max(this.vDomScrollHeight - this.vDomTopPad - rowsHeight - topPadHeight, 0);
-      }
-      element.style.paddingTop = this.vDomTopPad + "px";
-      element.style.paddingBottom = this.vDomBottomPad + "px";
-      if (forceMove) {
-        this.scrollTop = this.vDomTopPad + topPadHeight + offset - (this.elementVertical.scrollWidth > this.elementVertical.clientWidth ? this.elementVertical.offsetHeight - containerHeight : 0);
-      }
-      this.scrollTop = Math.min(this.scrollTop, this.elementVertical.scrollHeight - containerHeight);
-      if (this.elementVertical.scrollWidth > this.elementVertical.offsetWidth && forceMove) {
-        this.scrollTop += this.elementVertical.offsetHeight - containerHeight;
-      }
-      this.vDomScrollPosTop = this.scrollTop;
-      this.vDomScrollPosBottom = this.scrollTop;
-      holder.scrollTop = this.scrollTop;
-      this.dispatch("render-virtual-fill");
-    }
-  }
-  _addTopRow(rows, fillableSpace) {
-    var table = this.tableElement, addedRows = [], paddingAdjust = 0, index = this.vDomTop - 1, i = 0, working = true;
-    while (working) {
-      if (this.vDomTop) {
-        let row = rows[index], rowHeight, initialized;
-        if (row && i < this.vDomMaxRenderChain) {
-          rowHeight = row.getHeight() || this.vDomRowHeight;
-          initialized = row.initialized;
-          if (fillableSpace >= rowHeight) {
-            this.styleRow(row, index);
-            table.insertBefore(row.getElement(), table.firstChild);
-            if (!row.initialized || !row.heightInitialized) {
-              addedRows.push(row);
-            }
-            row.initialize();
-            if (!initialized) {
-              rowHeight = row.getElement().offsetHeight;
-              if (rowHeight > this.vDomWindowBuffer) {
-                this.vDomWindowBuffer = rowHeight * 2;
-              }
-            }
-            fillableSpace -= rowHeight;
-            paddingAdjust += rowHeight;
-            this.vDomTop--;
-            index--;
-            i++;
-          } else {
-            working = false;
-          }
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    for (let row of addedRows) {
-      row.clearCellHeight();
-    }
-    this._quickNormalizeRowHeight(addedRows);
-    if (paddingAdjust) {
-      this.vDomTopPad -= paddingAdjust;
-      if (this.vDomTopPad < 0) {
-        this.vDomTopPad = index * this.vDomRowHeight;
-      }
-      if (index < 1) {
-        this.vDomTopPad = 0;
-      }
-      table.style.paddingTop = this.vDomTopPad + "px";
-      this.vDomScrollPosTop -= paddingAdjust;
-    }
-  }
-  _removeTopRow(rows, fillableSpace) {
-    var removableRows = [], paddingAdjust = 0, i = 0, working = true;
-    while (working) {
-      let row = rows[this.vDomTop], rowHeight;
-      if (row && i < this.vDomMaxRenderChain) {
-        rowHeight = row.getHeight() || this.vDomRowHeight;
-        if (fillableSpace >= rowHeight) {
-          this.vDomTop++;
-          fillableSpace -= rowHeight;
-          paddingAdjust += rowHeight;
-          removableRows.push(row);
-          i++;
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    for (let row of removableRows) {
-      let rowEl = row.getElement();
-      if (rowEl.parentNode) {
-        rowEl.parentNode.removeChild(rowEl);
-      }
-    }
-    if (paddingAdjust) {
-      this.vDomTopPad += paddingAdjust;
-      this.tableElement.style.paddingTop = this.vDomTopPad + "px";
-      this.vDomScrollPosTop += this.vDomTop ? paddingAdjust : paddingAdjust + this.vDomWindowBuffer;
-    }
-  }
-  _addBottomRow(rows, fillableSpace) {
-    var table = this.tableElement, addedRows = [], paddingAdjust = 0, index = this.vDomBottom + 1, i = 0, working = true;
-    while (working) {
-      let row = rows[index], rowHeight, initialized;
-      if (row && i < this.vDomMaxRenderChain) {
-        rowHeight = row.getHeight() || this.vDomRowHeight;
-        initialized = row.initialized;
-        if (fillableSpace >= rowHeight) {
-          this.styleRow(row, index);
-          table.appendChild(row.getElement());
-          if (!row.initialized || !row.heightInitialized) {
-            addedRows.push(row);
-          }
-          row.initialize();
-          if (!initialized) {
-            rowHeight = row.getElement().offsetHeight;
-            if (rowHeight > this.vDomWindowBuffer) {
-              this.vDomWindowBuffer = rowHeight * 2;
-            }
-          }
-          fillableSpace -= rowHeight;
-          paddingAdjust += rowHeight;
-          this.vDomBottom++;
-          index++;
-          i++;
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    for (let row of addedRows) {
-      row.clearCellHeight();
-    }
-    this._quickNormalizeRowHeight(addedRows);
-    if (paddingAdjust) {
-      this.vDomBottomPad -= paddingAdjust;
-      if (this.vDomBottomPad < 0 || index == rows.length - 1) {
-        this.vDomBottomPad = 0;
-      }
-      table.style.paddingBottom = this.vDomBottomPad + "px";
-      this.vDomScrollPosBottom += paddingAdjust;
-    }
-  }
-  _removeBottomRow(rows, fillableSpace) {
-    var removableRows = [], paddingAdjust = 0, i = 0, working = true;
-    while (working) {
-      let row = rows[this.vDomBottom], rowHeight;
-      if (row && i < this.vDomMaxRenderChain) {
-        rowHeight = row.getHeight() || this.vDomRowHeight;
-        if (fillableSpace >= rowHeight) {
-          this.vDomBottom--;
-          fillableSpace -= rowHeight;
-          paddingAdjust += rowHeight;
-          removableRows.push(row);
-          i++;
-        } else {
-          working = false;
-        }
-      } else {
-        working = false;
-      }
-    }
-    for (let row of removableRows) {
-      let rowEl = row.getElement();
-      if (rowEl.parentNode) {
-        rowEl.parentNode.removeChild(rowEl);
-      }
-    }
-    if (paddingAdjust) {
-      this.vDomBottomPad += paddingAdjust;
-      if (this.vDomBottomPad < 0) {
-        this.vDomBottomPad = 0;
-      }
-      this.tableElement.style.paddingBottom = this.vDomBottomPad + "px";
-      this.vDomScrollPosBottom -= paddingAdjust;
-    }
-  }
-  _quickNormalizeRowHeight(rows) {
-    for (let row of rows) {
-      row.calcHeight();
-    }
-    for (let row of rows) {
-      row.setCellHeight();
-    }
-  }
-}
-
-class RowManager extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.element = this.createHolderElement();
-    this.tableElement = this.createTableElement();
-    this.heightFixer = this.createTableElement();
-    this.placeholder = null;
-    this.placeholderContents = null;
-    this.firstRender = false;
-    this.renderMode = "virtual";
-    this.fixedHeight = false;
-    this.rows = [];
-    this.activeRowsPipeline = [];
-    this.activeRows = [];
-    this.activeRowsCount = 0;
-    this.displayRows = [];
-    this.displayRowsCount = 0;
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-    this.redrawBlock = false;
-    this.redrawBlockRestoreConfig = false;
-    this.redrawBlockRenderInPosition = false;
-    this.dataPipeline = [];
-    this.displayPipeline = [];
-    this.scrollbarWidth = 0;
-    this.renderer = null;
-  }
-  createHolderElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-tableholder");
-    el.setAttribute("tabindex", 0);
-    return el;
-  }
-  createTableElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-table");
-    el.setAttribute("role", "rowgroup");
-    return el;
-  }
-  initializePlaceholder() {
-    if (typeof this.table.options.placeholder == "string") {
-      let el = document.createElement("div");
-      el.classList.add("tabulator-placeholder");
-      let contents = document.createElement("div");
-      contents.classList.add("tabulator-placeholder-contents");
-      contents.innerHTML = this.table.options.placeholder;
-      el.appendChild(contents);
-      this.placeholderContents = contents;
-      this.placeholder = el;
-    }
-  }
-  getElement() {
-    return this.element;
-  }
-  getTableElement() {
-    return this.tableElement;
-  }
-  initialize() {
-    this.initializePlaceholder();
-    this.initializeRenderer();
-    this.element.appendChild(this.tableElement);
-    this.firstRender = true;
-    this.element.addEventListener("scroll", () => {
-      var left = this.element.scrollLeft, leftDir = this.scrollLeft > left, top = this.element.scrollTop, topDir = this.scrollTop > top;
-      if (this.scrollLeft != left) {
-        this.scrollLeft = left;
-        this.dispatch("scroll-horizontal", left, leftDir);
-        this.dispatchExternal("scrollHorizontal", left, leftDir);
-        this._positionPlaceholder();
-      }
-      if (this.scrollTop != top) {
-        this.scrollTop = top;
-        this.renderer.scrollRows(top, topDir);
-        this.dispatch("scroll-vertical", top, topDir);
-        this.dispatchExternal("scrollVertical", top, topDir);
-      }
-    });
-  }
-  findRow(subject) {
-    if (typeof subject == "object") {
-      if (subject instanceof Row) {
-        return subject;
-      } else if (subject instanceof RowComponent) {
-        return subject._getSelf() || false;
-      } else if (typeof HTMLElement !== "undefined" && subject instanceof HTMLElement) {
-        let match = this.rows.find((row) => {
-          return row.getElement() === subject;
-        });
-        return match || false;
-      } else if (subject === null) {
-        return false;
-      }
-    } else if (typeof subject == "undefined") {
-      return false;
-    } else {
-      let match = this.rows.find((row) => {
-        return row.data[this.table.options.index] == subject;
-      });
-      return match || false;
-    }
-    return false;
-  }
-  getRowFromDataObject(data) {
-    var match = this.rows.find((row) => {
-      return row.data === data;
-    });
-    return match || false;
-  }
-  getRowFromPosition(position) {
-    return this.getDisplayRows().find((row) => {
-      return row.getPosition() === position && row.isDisplayed();
-    });
-  }
-  scrollToRow(row, position, ifVisible) {
-    return this.renderer.scrollToRowPosition(row, position, ifVisible);
-  }
-  setData(data, renderInPosition, columnsChanged) {
-    return new Promise((resolve, reject) => {
-      if (renderInPosition && this.getDisplayRows().length) {
-        if (this.table.options.pagination) {
-          this._setDataActual(data, true);
-        } else {
-          this.reRenderInPosition(() => {
-            this._setDataActual(data);
-          });
-        }
-      } else {
-        if (this.table.options.autoColumns && columnsChanged && this.table.initialized) {
-          this.table.columnManager.generateColumnsFromRowData(data);
-        }
-        this.resetScroll();
-        this._setDataActual(data);
-      }
-      resolve();
-    });
-  }
-  _setDataActual(data, renderInPosition) {
-    this.dispatchExternal("dataProcessing", data);
-    this._wipeElements();
-    if (Array.isArray(data)) {
-      this.dispatch("data-processing", data);
-      data.forEach((def, i) => {
-        if (def && typeof def === "object") {
-          var row = new Row(def, this);
-          this.rows.push(row);
-        } else {
-          console.warn("Data Loading Warning - Invalid row data detected and ignored, expecting object but received:", def);
-        }
-      });
-      this.refreshActiveData(false, false, renderInPosition);
-      this.dispatch("data-processed", data);
-      this.dispatchExternal("dataProcessed", data);
-    } else {
-      console.error("Data Loading Error - Unable to process data due to invalid data type \nExpecting: array \nReceived: ", typeof data, "\nData:     ", data);
-    }
-  }
-  _wipeElements() {
-    this.dispatch("rows-wipe");
-    this.rows.forEach((row) => {
-      row.wipe();
-    });
-    this.rows = [];
-    this.activeRows = [];
-    this.activeRowsPipeline = [];
-    this.activeRowsCount = 0;
-    this.displayRows = [];
-    this.displayRowsCount = 0;
-    this.adjustTableSize();
-  }
-  deleteRow(row, blockRedraw) {
-    var allIndex = this.rows.indexOf(row), activeIndex = this.activeRows.indexOf(row);
-    if (activeIndex > -1) {
-      this.activeRows.splice(activeIndex, 1);
-    }
-    if (allIndex > -1) {
-      this.rows.splice(allIndex, 1);
-    }
-    this.setActiveRows(this.activeRows);
-    this.displayRowIterator((rows) => {
-      var displayIndex = rows.indexOf(row);
-      if (displayIndex > -1) {
-        rows.splice(displayIndex, 1);
-      }
-    });
-    if (!blockRedraw) {
-      this.reRenderInPosition();
-    }
-    this.regenerateRowPositions();
-    this.dispatchExternal("rowDeleted", row.getComponent());
-    if (!this.displayRowsCount) {
-      this._showPlaceholder();
-    }
-    if (this.subscribedExternal("dataChanged")) {
-      this.dispatchExternal("dataChanged", this.getData());
-    }
-  }
-  addRow(data, pos, index, blockRedraw) {
-    var row = this.addRowActual(data, pos, index, blockRedraw);
-    return row;
-  }
-  addRows(data, pos, index) {
-    var rows = [];
-    return new Promise((resolve, reject) => {
-      pos = this.findAddRowPos(pos);
-      if (!Array.isArray(data)) {
-        data = [data];
-      }
-      if (typeof index == "undefined" && pos || typeof index !== "undefined" && !pos) {
-        data.reverse();
-      }
-      data.forEach((item, i) => {
-        var row = this.addRow(item, pos, index, true);
-        rows.push(row);
-        this.dispatch("row-added", row, data, pos, index);
-      });
-      this.refreshActiveData(false, false, true);
-      this.regenerateRowPositions();
-      if (rows.length) {
-        this._clearPlaceholder();
-      }
-      resolve(rows);
-    });
-  }
-  findAddRowPos(pos) {
-    if (typeof pos === "undefined") {
-      pos = this.table.options.addRowPos;
-    }
-    if (pos === "pos") {
-      pos = true;
-    }
-    if (pos === "bottom") {
-      pos = false;
-    }
-    return pos;
-  }
-  addRowActual(data, pos, index, blockRedraw) {
-    var row = data instanceof Row ? data : new Row(data || {}, this), top = this.findAddRowPos(pos), allIndex = -1, activeIndex, chainResult;
-    if (!index) {
-      chainResult = this.chain("row-adding-position", [row, top], null, { index, top });
-      index = chainResult.index;
-      top = chainResult.top;
-    }
-    if (typeof index !== "undefined") {
-      index = this.findRow(index);
-    }
-    index = this.chain("row-adding-index", [row, index, top], null, index);
-    if (index) {
-      allIndex = this.rows.indexOf(index);
-    }
-    if (index && allIndex > -1) {
-      activeIndex = this.activeRows.indexOf(index);
-      this.displayRowIterator(function(rows) {
-        var displayIndex = rows.indexOf(index);
-        if (displayIndex > -1) {
-          rows.splice(top ? displayIndex : displayIndex + 1, 0, row);
-        }
-      });
-      if (activeIndex > -1) {
-        this.activeRows.splice(top ? activeIndex : activeIndex + 1, 0, row);
-      }
-      this.rows.splice(top ? allIndex : allIndex + 1, 0, row);
-    } else {
-      if (top) {
-        this.displayRowIterator(function(rows) {
-          rows.unshift(row);
-        });
-        this.activeRows.unshift(row);
-        this.rows.unshift(row);
-      } else {
-        this.displayRowIterator(function(rows) {
-          rows.push(row);
-        });
-        this.activeRows.push(row);
-        this.rows.push(row);
-      }
-    }
-    this.setActiveRows(this.activeRows);
-    this.dispatchExternal("rowAdded", row.getComponent());
-    if (this.subscribedExternal("dataChanged")) {
-      this.dispatchExternal("dataChanged", this.table.rowManager.getData());
-    }
-    if (!blockRedraw) {
-      this.reRenderInPosition();
-    }
-    return row;
-  }
-  moveRow(from, to, after) {
-    this.dispatch("row-move", from, to, after);
-    this.moveRowActual(from, to, after);
-    this.regenerateRowPositions();
-    this.dispatch("row-moved", from, to, after);
-    this.dispatchExternal("rowMoved", from.getComponent());
-  }
-  moveRowActual(from, to, after) {
-    this.moveRowInArray(this.rows, from, to, after);
-    this.moveRowInArray(this.activeRows, from, to, after);
-    this.displayRowIterator((rows) => {
-      this.moveRowInArray(rows, from, to, after);
-    });
-    this.dispatch("row-moving", from, to, after);
-  }
-  moveRowInArray(rows, from, to, after) {
-    var fromIndex, toIndex, start, end;
-    if (from !== to) {
-      fromIndex = rows.indexOf(from);
-      if (fromIndex > -1) {
-        rows.splice(fromIndex, 1);
-        toIndex = rows.indexOf(to);
-        if (toIndex > -1) {
-          if (after) {
-            rows.splice(toIndex + 1, 0, from);
-          } else {
-            rows.splice(toIndex, 0, from);
-          }
-        } else {
-          rows.splice(fromIndex, 0, from);
-        }
-      }
-      if (rows === this.getDisplayRows()) {
-        start = fromIndex < toIndex ? fromIndex : toIndex;
-        end = toIndex > fromIndex ? toIndex : fromIndex + 1;
-        for (let i = start; i <= end; i++) {
-          if (rows[i]) {
-            this.styleRow(rows[i], i);
-          }
-        }
-      }
-    }
-  }
-  clearData() {
-    this.setData([]);
-  }
-  getRowIndex(row) {
-    return this.findRowIndex(row, this.rows);
-  }
-  getDisplayRowIndex(row) {
-    var index = this.getDisplayRows().indexOf(row);
-    return index > -1 ? index : false;
-  }
-  nextDisplayRow(row, rowOnly) {
-    var index = this.getDisplayRowIndex(row), nextRow = false;
-    if (index !== false && index < this.displayRowsCount - 1) {
-      nextRow = this.getDisplayRows()[index + 1];
-    }
-    if (nextRow && (!(nextRow instanceof Row) || nextRow.type != "row")) {
-      return this.nextDisplayRow(nextRow, rowOnly);
-    }
-    return nextRow;
-  }
-  prevDisplayRow(row, rowOnly) {
-    var index = this.getDisplayRowIndex(row), prevRow = false;
-    if (index) {
-      prevRow = this.getDisplayRows()[index - 1];
-    }
-    if (rowOnly && prevRow && (!(prevRow instanceof Row) || prevRow.type != "row")) {
-      return this.prevDisplayRow(prevRow, rowOnly);
-    }
-    return prevRow;
-  }
-  findRowIndex(row, list) {
-    var rowIndex;
-    row = this.findRow(row);
-    if (row) {
-      rowIndex = list.indexOf(row);
-      if (rowIndex > -1) {
-        return rowIndex;
-      }
-    }
-    return false;
-  }
-  getData(active, transform) {
-    var output = [], rows = this.getRows(active);
-    rows.forEach(function(row) {
-      if (row.type == "row") {
-        output.push(row.getData(transform || "data"));
-      }
-    });
-    return output;
-  }
-  getComponents(active) {
-    var output = [], rows = this.getRows(active);
-    rows.forEach(function(row) {
-      output.push(row.getComponent());
-    });
-    return output;
-  }
-  getDataCount(active) {
-    var rows = this.getRows(active);
-    return rows.length;
-  }
-  scrollHorizontal(left) {
-    this.scrollLeft = left;
-    this.element.scrollLeft = left;
-    this.dispatch("scroll-horizontal", left);
-  }
-  registerDataPipelineHandler(handler, priority) {
-    if (typeof priority !== "undefined") {
-      this.dataPipeline.push({ handler, priority });
-      this.dataPipeline.sort((a, b) => {
-        return a.priority - b.priority;
-      });
-    } else {
-      console.error("Data pipeline handlers must have a priority in order to be registered");
-    }
-  }
-  registerDisplayPipelineHandler(handler, priority) {
-    if (typeof priority !== "undefined") {
-      this.displayPipeline.push({ handler, priority });
-      this.displayPipeline.sort((a, b) => {
-        return a.priority - b.priority;
-      });
-    } else {
-      console.error("Display pipeline handlers must have a priority in order to be registered");
-    }
-  }
-  refreshActiveData(handler, skipStage, renderInPosition) {
-    var table = this.table, stage = "", index = 0, cascadeOrder = ["all", "dataPipeline", "display", "displayPipeline", "end"];
-    if (!this.table.destroyed) {
-      if (typeof handler === "function") {
-        index = this.dataPipeline.findIndex((item) => {
-          return item.handler === handler;
-        });
-        if (index > -1) {
-          stage = "dataPipeline";
-          if (skipStage) {
-            if (index == this.dataPipeline.length - 1) {
-              stage = "display";
-            } else {
-              index++;
-            }
-          }
-        } else {
-          index = this.displayPipeline.findIndex((item) => {
-            return item.handler === handler;
-          });
-          if (index > -1) {
-            stage = "displayPipeline";
-            if (skipStage) {
-              if (index == this.displayPipeline.length - 1) {
-                stage = "end";
-              } else {
-                index++;
-              }
-            }
-          } else {
-            console.error("Unable to refresh data, invalid handler provided", handler);
-            return;
-          }
-        }
-      } else {
-        stage = handler || "all";
-        index = 0;
-      }
-      if (this.redrawBlock) {
-        if (!this.redrawBlockRestoreConfig || this.redrawBlockRestoreConfig && (this.redrawBlockRestoreConfig.stage === stage && index < this.redrawBlockRestoreConfig.index || cascadeOrder.indexOf(stage) < cascadeOrder.indexOf(this.redrawBlockRestoreConfig.stage))) {
-          this.redrawBlockRestoreConfig = {
-            handler,
-            skipStage,
-            renderInPosition,
-            stage,
-            index
-          };
-        }
-        return;
-      } else {
-        if (Helpers.elVisible(this.element)) {
-          if (renderInPosition) {
-            this.reRenderInPosition(this.refreshPipelines.bind(this, handler, stage, index, renderInPosition));
-          } else {
-            this.refreshPipelines(handler, stage, index, renderInPosition);
-            if (!handler) {
-              this.table.columnManager.renderer.renderColumns();
-            }
-            this.renderTable();
-            if (table.options.layoutColumnsOnNewData) {
-              this.table.columnManager.redraw(true);
-            }
-          }
-        } else {
-          this.refreshPipelines(handler, stage, index, renderInPosition);
-        }
-        this.dispatch("data-refreshed");
-      }
-    }
-  }
-  refreshPipelines(handler, stage, index, renderInPosition) {
-    this.dispatch("data-refreshing");
-    if (!handler) {
-      this.activeRowsPipeline[0] = this.rows.slice(0);
-    }
-    switch (stage) {
-      case "all":
-      case "dataPipeline":
-        for (let i = index; i < this.dataPipeline.length; i++) {
-          let result = this.dataPipeline[i].handler(this.activeRowsPipeline[i].slice(0));
-          this.activeRowsPipeline[i + 1] = result || this.activeRowsPipeline[i].slice(0);
-        }
-        this.setActiveRows(this.activeRowsPipeline[this.dataPipeline.length]);
-      case "display":
-        index = 0;
-        this.resetDisplayRows();
-      case "displayPipeline":
-        for (let i = index; i < this.displayPipeline.length; i++) {
-          let result = this.displayPipeline[i].handler((i ? this.getDisplayRows(i - 1) : this.activeRows).slice(0), renderInPosition);
-          this.setDisplayRows(result || this.getDisplayRows(i - 1).slice(0), i);
-        }
-      case "end":
-        this.regenerateRowPositions();
-    }
-    if (this.getDisplayRows().length) {
-      this._clearPlaceholder();
-    }
-  }
-  regenerateRowPositions() {
-    var rows = this.getDisplayRows();
-    var index = 1;
-    rows.forEach((row) => {
-      if (row.type === "row") {
-        row.setPosition(index);
-        index++;
-      }
-    });
-  }
-  setActiveRows(activeRows) {
-    this.activeRows = activeRows;
-    this.activeRowsCount = this.activeRows.length;
-  }
-  resetDisplayRows() {
-    this.displayRows = [];
-    this.displayRows.push(this.activeRows.slice(0));
-    this.displayRowsCount = this.displayRows[0].length;
-  }
-  setDisplayRows(displayRows, index) {
-    this.displayRows[index] = displayRows;
-    if (index == this.displayRows.length - 1) {
-      this.displayRowsCount = this.displayRows[this.displayRows.length - 1].length;
-    }
-  }
-  getDisplayRows(index) {
-    if (typeof index == "undefined") {
-      return this.displayRows.length ? this.displayRows[this.displayRows.length - 1] : [];
-    } else {
-      return this.displayRows[index] || [];
-    }
-  }
-  getVisibleRows(chain, viewable) {
-    var rows = Object.assign([], this.renderer.visibleRows(!viewable));
-    if (chain) {
-      rows = this.chain("rows-visible", [viewable], rows, rows);
-    }
-    return rows;
-  }
-  displayRowIterator(callback) {
-    this.activeRowsPipeline.forEach(callback);
-    this.displayRows.forEach(callback);
-    this.displayRowsCount = this.displayRows[this.displayRows.length - 1].length;
-  }
-  getRows(type) {
-    var rows = [];
-    if (!type || type === true) {
-      rows = this.chain("rows-retrieve", type, null, this.rows) || this.rows;
-    } else {
-      switch (type) {
-        case "active":
-          rows = this.activeRows;
-          break;
-        case "display":
-          rows = this.table.rowManager.getDisplayRows();
-          break;
-        case "visible":
-          rows = this.getVisibleRows(false, true);
-          break;
-      }
-    }
-    return rows;
-  }
-  reRenderInPosition(callback) {
-    if (this.redrawBlock) {
-      if (callback) {
-        callback();
-      } else {
-        this.redrawBlockRenderInPosition = true;
-      }
-    } else {
-      this.dispatchExternal("renderStarted");
-      this.renderer.rerenderRows(callback);
-      if (!this.fixedHeight) {
-        this.adjustTableSize();
-      }
-      this.scrollBarCheck();
-      this.dispatchExternal("renderComplete");
-    }
-  }
-  scrollBarCheck() {
-    var scrollbarWidth = 0;
-    if (this.element.scrollHeight > this.element.clientHeight) {
-      scrollbarWidth = this.element.offsetWidth - this.element.clientWidth;
-    }
-    if (scrollbarWidth !== this.scrollbarWidth) {
-      this.scrollbarWidth = scrollbarWidth;
-      this.dispatch("scrollbar-vertical", scrollbarWidth);
-    }
-  }
-  initializeRenderer() {
-    var renderClass;
-    var renderers = {
-      "virtual": VirtualDomVertical,
-      "basic": BasicVertical
-    };
-    if (typeof this.table.options.renderVertical === "string") {
-      renderClass = renderers[this.table.options.renderVertical];
-    } else {
-      renderClass = this.table.options.renderVertical;
-    }
-    if (renderClass) {
-      this.renderMode = this.table.options.renderVertical;
-      this.renderer = new renderClass(this.table, this.element, this.tableElement);
-      this.renderer.initialize();
-      if (this.table.element.clientHeight || this.table.options.height) {
-        this.fixedHeight = true;
-      } else {
-        this.fixedHeight = false;
-      }
-    } else {
-      console.error("Unable to find matching renderer:", this.table.options.renderVertical);
-    }
-  }
-  getRenderMode() {
-    return this.renderMode;
-  }
-  renderTable() {
-    this.dispatchExternal("renderStarted");
-    this.element.scrollTop = 0;
-    this._clearTable();
-    if (this.displayRowsCount) {
-      this.renderer.renderRows();
-      if (this.firstRender) {
-        this.firstRender = false;
-        this.layoutRefresh(true);
-      }
-    } else {
-      this.renderEmptyScroll();
-    }
-    if (!this.fixedHeight) {
-      this.adjustTableSize();
-    }
-    this.dispatch("table-layout");
-    if (!this.displayRowsCount) {
-      this._showPlaceholder();
-    }
-    this.scrollBarCheck();
-    this.dispatchExternal("renderComplete");
-  }
-  renderEmptyScroll() {
-    if (this.placeholder) {
-      this.tableElement.style.display = "none";
-    } else {
-      this.tableElement.style.minWidth = this.table.columnManager.getWidth() + "px";
-    }
-  }
-  _clearTable() {
-    this._clearPlaceholder();
-    this.scrollTop = 0;
-    this.scrollLeft = 0;
-    this.renderer.clearRows();
-  }
-  _showPlaceholder() {
-    if (this.placeholder) {
-      this.placeholder.setAttribute("tabulator-render-mode", this.renderMode);
-      this.getElement().appendChild(this.placeholder);
-      this._positionPlaceholder();
-    }
-  }
-  _clearPlaceholder() {
-    if (this.placeholder && this.placeholder.parentNode) {
-      this.placeholder.parentNode.removeChild(this.placeholder);
-    }
-    this.tableElement.style.minWidth = "";
-  }
-  _positionPlaceholder() {
-    if (this.placeholder && this.placeholder.parentNode) {
-      this.placeholder.style.width = this.table.columnManager.getWidth() + "px";
-      this.placeholderContents.style.width = this.table.rowManager.element.clientWidth + "px";
-      this.placeholderContents.style.marginLeft = this.scrollLeft + "px";
-    }
-  }
-  styleRow(row, index) {
-    var rowEl = row.getElement();
-    if (index % 2) {
-      rowEl.classList.add("tabulator-row-even");
-      rowEl.classList.remove("tabulator-row-odd");
-    } else {
-      rowEl.classList.add("tabulator-row-odd");
-      rowEl.classList.remove("tabulator-row-even");
-    }
-  }
-  normalizeHeight() {
-    this.activeRows.forEach(function(row) {
-      row.normalizeHeight();
-    });
-  }
-  adjustTableSize() {
-    var initialHeight = this.element.clientHeight, minHeight;
-    if (this.renderer.verticalFillMode === "fill") {
-      let otherHeight = Math.floor(this.table.columnManager.getElement().getBoundingClientRect().height + (this.table.footerManager && this.table.footerManager.active && !this.table.footerManager.external ? this.table.footerManager.getElement().getBoundingClientRect().height : 0));
-      if (this.fixedHeight) {
-        minHeight = isNaN(this.table.options.minHeight) ? this.table.options.minHeight : this.table.options.minHeight + "px";
-        this.element.style.minHeight = minHeight || "calc(100% - " + otherHeight + "px)";
-        this.element.style.height = "calc(100% - " + otherHeight + "px)";
-        this.element.style.maxHeight = "calc(100% - " + otherHeight + "px)";
-      } else {
-        this.element.style.height = "";
-        this.element.style.height = this.table.element.clientHeight - otherHeight + "px";
-        this.element.scrollTop = this.scrollTop;
-      }
-      this.renderer.resize();
-      if (!this.fixedHeight && initialHeight != this.element.clientHeight) {
-        if (this.subscribed("table-resize")) {
-          this.dispatch("table-resize");
-        } else {
-          this.redraw();
-        }
-      }
-      this.scrollBarCheck();
-    }
-    this._positionPlaceholder();
-  }
-  reinitialize() {
-    this.rows.forEach(function(row) {
-      row.reinitialize(true);
-    });
-  }
-  blockRedraw() {
-    this.redrawBlock = true;
-    this.redrawBlockRestoreConfig = false;
-  }
-  restoreRedraw() {
-    this.redrawBlock = false;
-    if (this.redrawBlockRestoreConfig) {
-      this.refreshActiveData(this.redrawBlockRestoreConfig.handler, this.redrawBlockRestoreConfig.skipStage, this.redrawBlockRestoreConfig.renderInPosition);
-      this.redrawBlockRestoreConfig = false;
-    } else {
-      if (this.redrawBlockRenderInPosition) {
-        this.reRenderInPosition();
-      }
-    }
-    this.redrawBlockRenderInPosition = false;
-  }
-  redraw(force) {
-    var left = this.scrollLeft;
-    this.adjustTableSize();
-    this.table.tableWidth = this.table.element.clientWidth;
-    if (!force) {
-      this.reRenderInPosition();
-      this.scrollHorizontal(left);
-    } else {
-      this.renderTable();
-    }
-  }
-  resetScroll() {
-    this.element.scrollLeft = 0;
-    this.element.scrollTop = 0;
-    if (this.table.browser === "ie") {
-      var event = document.createEvent("Event");
-      event.initEvent("scroll", false, true);
-      this.element.dispatchEvent(event);
-    } else {
-      this.element.dispatchEvent(new Event("scroll"));
-    }
-  }
-}
-
-class FooterManager extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.active = false;
-    this.element = this.createElement();
-    this.containerElement = this.createContainerElement();
-    this.external = false;
-  }
-  initialize() {
-    this.initializeElement();
-  }
-  createElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-footer");
-    return el;
-  }
-  createContainerElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-footer-contents");
-    this.element.appendChild(el);
-    return el;
-  }
-  initializeElement() {
-    if (this.table.options.footerElement) {
-      switch (typeof this.table.options.footerElement) {
-        case "string":
-          if (this.table.options.footerElement[0] === "<") {
-            this.containerElement.innerHTML = this.table.options.footerElement;
-          } else {
-            this.external = true;
-            this.containerElement = document.querySelector(this.table.options.footerElement);
-          }
-          break;
-        default:
-          this.element = this.table.options.footerElement;
-          break;
-      }
-    }
-  }
-  getElement() {
-    return this.element;
-  }
-  append(element) {
-    this.activate();
-    this.containerElement.appendChild(element);
-    this.table.rowManager.adjustTableSize();
-  }
-  prepend(element) {
-    this.activate();
-    this.element.insertBefore(element, this.element.firstChild);
-    this.table.rowManager.adjustTableSize();
-  }
-  remove(element) {
-    element.parentNode.removeChild(element);
-    this.deactivate();
-  }
-  deactivate(force) {
-    if (!this.element.firstChild || force) {
-      if (!this.external) {
-        this.element.parentNode.removeChild(this.element);
-      }
-      this.active = false;
-    }
-  }
-  activate() {
-    if (!this.active) {
-      this.active = true;
-      if (!this.external) {
-        this.table.element.appendChild(this.getElement());
-        this.table.element.style.display = "";
-      }
-    }
-  }
-  redraw() {
-    this.dispatch("footer-redraw");
-  }
-}
-
-class InteractionManager extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.el = null;
-    this.abortClasses = ["tabulator-headers", "tabulator-table"];
-    this.previousTargets = {};
-    this.listeners = [
-      "click",
-      "dblclick",
-      "contextmenu",
-      "mouseenter",
-      "mouseleave",
-      "mouseover",
-      "mouseout",
-      "mousemove",
-      "mouseup",
-      "mousedown",
-      "touchstart",
-      "touchend"
-    ];
-    this.componentMap = {
-      "tabulator-cell": "cell",
-      "tabulator-row": "row",
-      "tabulator-group": "group",
-      "tabulator-col": "column"
-    };
-    this.pseudoTrackers = {
-      "row": {
-        subscriber: null,
-        target: null
-      },
-      "cell": {
-        subscriber: null,
-        target: null
-      },
-      "group": {
-        subscriber: null,
-        target: null
-      },
-      "column": {
-        subscriber: null,
-        target: null
-      }
-    };
-    this.pseudoTracking = false;
-  }
-  initialize() {
-    this.el = this.table.element;
-    this.buildListenerMap();
-    this.bindSubscriptionWatchers();
-  }
-  buildListenerMap() {
-    var listenerMap = {};
-    this.listeners.forEach((listener) => {
-      listenerMap[listener] = {
-        handler: null,
-        components: []
-      };
-    });
-    this.listeners = listenerMap;
-  }
-  bindPseudoEvents() {
-    Object.keys(this.pseudoTrackers).forEach((key) => {
-      this.pseudoTrackers[key].subscriber = this.pseudoMouseEnter.bind(this, key);
-      this.subscribe(key + "-mouseover", this.pseudoTrackers[key].subscriber);
-    });
-    this.pseudoTracking = true;
-  }
-  pseudoMouseEnter(key, e, target) {
-    if (this.pseudoTrackers[key].target !== target) {
-      if (this.pseudoTrackers[key].target) {
-        this.dispatch(key + "-mouseleave", e, this.pseudoTrackers[key].target);
-      }
-      this.pseudoMouseLeave(key, e);
-      this.pseudoTrackers[key].target = target;
-      this.dispatch(key + "-mouseenter", e, target);
-    }
-  }
-  pseudoMouseLeave(key, e) {
-    var leaveList = Object.keys(this.pseudoTrackers), linkedKeys = {
-      "row": ["cell"],
-      "cell": ["row"]
-    };
-    leaveList = leaveList.filter((item) => {
-      var links = linkedKeys[key];
-      return item !== key && (!links || links && !links.includes(item));
-    });
-    leaveList.forEach((key2) => {
-      var target = this.pseudoTrackers[key2].target;
-      if (this.pseudoTrackers[key2].target) {
-        this.dispatch(key2 + "-mouseleave", e, target);
-        this.pseudoTrackers[key2].target = null;
-      }
-    });
-  }
-  bindSubscriptionWatchers() {
-    var listeners = Object.keys(this.listeners), components = Object.values(this.componentMap);
-    for (let comp of components) {
-      for (let listener of listeners) {
-        let key = comp + "-" + listener;
-        this.subscriptionChange(key, this.subscriptionChanged.bind(this, comp, listener));
-      }
-    }
-    this.subscribe("table-destroy", this.clearWatchers.bind(this));
-  }
-  subscriptionChanged(component, key, added) {
-    var listener = this.listeners[key].components, index = listener.indexOf(component), changed = false;
-    if (added) {
-      if (index === -1) {
-        listener.push(component);
-        changed = true;
-      }
-    } else {
-      if (!this.subscribed(component + "-" + key)) {
-        if (index > -1) {
-          listener.splice(index, 1);
-          changed = true;
-        }
-      }
-    }
-    if ((key === "mouseenter" || key === "mouseleave") && !this.pseudoTracking) {
-      this.bindPseudoEvents();
-    }
-    if (changed) {
-      this.updateEventListeners();
-    }
-  }
-  updateEventListeners() {
-    for (let key in this.listeners) {
-      let listener = this.listeners[key];
-      if (listener.components.length) {
-        if (!listener.handler) {
-          listener.handler = this.track.bind(this, key);
-          this.el.addEventListener(key, listener.handler);
-        }
-      } else {
-        if (listener.handler) {
-          this.el.removeEventListener(key, listener.handler);
-          listener.handler = null;
-        }
-      }
-    }
-  }
-  track(type, e) {
-    var path = e.composedPath && e.composedPath() || e.path;
-    var targets = this.findTargets(path);
-    targets = this.bindComponents(type, targets);
-    this.triggerEvents(type, e, targets);
-    if (this.pseudoTracking && (type == "mouseover" || type == "mouseleave") && !Object.keys(targets).length) {
-      this.pseudoMouseLeave("none", e);
-    }
-  }
-  findTargets(path) {
-    var targets = {};
-    let componentMap = Object.keys(this.componentMap);
-    for (let el of path) {
-      let classList = el.classList ? [...el.classList] : [];
-      let abort = classList.filter((item) => {
-        return this.abortClasses.includes(item);
-      });
-      if (abort.length) {
-        break;
-      }
-      let elTargets = classList.filter((item) => {
-        return componentMap.includes(item);
-      });
-      for (let target of elTargets) {
-        if (!targets[this.componentMap[target]]) {
-          targets[this.componentMap[target]] = el;
-        }
-      }
-    }
-    if (targets.group && targets.group === targets.row) {
-      delete targets.row;
-    }
-    return targets;
-  }
-  bindComponents(type, targets) {
-    var keys = Object.keys(targets).reverse(), listener = this.listeners[type], matches = {}, targetMatches = {};
-    for (let key of keys) {
-      let component, target = targets[key], previousTarget = this.previousTargets[key];
-      if (previousTarget && previousTarget.target === target) {
-        component = previousTarget.component;
-      } else {
-        switch (key) {
-          case "row":
-          case "group":
-            if (listener.components.includes("row") || listener.components.includes("cell") || listener.components.includes("group")) {
-              let rows = this.table.rowManager.getVisibleRows(true);
-              component = rows.find((row) => {
-                return row.getElement() === target;
-              });
-              if (targets["row"] && targets["row"].parentNode && targets["row"].parentNode.closest(".tabulator-row")) {
-                targets[key] = false;
-              }
-            }
-            break;
-          case "column":
-            if (listener.components.includes("column")) {
-              component = this.table.columnManager.findColumn(target);
-            }
-            break;
-          case "cell":
-            if (listener.components.includes("cell")) {
-              if (matches["row"] instanceof Row) {
-                component = matches["row"].findCell(target);
-              } else {
-                if (targets["row"]) {
-                  console.warn("Event Target Lookup Error - The row this cell is attached to cannot be found, has the table been reinitialized without being destroyed first?");
-                }
-              }
-            }
-            break;
-        }
-      }
-      if (component) {
-        matches[key] = component;
-        targetMatches[key] = {
-          target,
-          component
-        };
-      }
-    }
-    this.previousTargets = targetMatches;
-    return matches;
-  }
-  triggerEvents(type, e, targets) {
-    var listener = this.listeners[type];
-    for (let key in targets) {
-      if (targets[key] && listener.components.includes(key)) {
-        this.dispatch(key + "-" + type, e, targets[key]);
-      }
-    }
-  }
-  clearWatchers() {
-    for (let key in this.listeners) {
-      let listener = this.listeners[key];
-      if (listener.handler) {
-        this.el.removeEventListener(key, listener.handler);
-        listener.handler = null;
-      }
-    }
-  }
-}
-
-class ComponentFunctionBinder {
-  constructor(table) {
-    this.table = table;
-    this.bindings = {};
-  }
-  bind(type, funcName, handler) {
-    if (!this.bindings[type]) {
-      this.bindings[type] = {};
-    }
-    if (this.bindings[type][funcName]) {
-      console.warn("Unable to bind component handler, a matching function name is already bound", type, funcName, handler);
-    } else {
-      this.bindings[type][funcName] = handler;
-    }
-  }
-  handle(type, component, name) {
-    if (this.bindings[type] && this.bindings[type][name] && typeof this.bindings[type][name].bind === "function") {
-      return this.bindings[type][name].bind(null, component);
-    } else {
-      if (name !== "then" && typeof name === "string" && !name.startsWith("_")) {
-        if (this.table.options.debugInvalidComponentFuncs) {
-          console.error("The " + type + " component does not have a " + name + " function, have you checked that you have the correct Tabulator module installed?");
-        }
-      }
-    }
-  }
-}
-
-class DataLoader extends CoreFeature {
-  constructor(table) {
-    super(table);
-    this.requestOrder = 0;
-    this.loading = false;
-  }
-  initialize() {
-  }
-  load(data, params, config, replace, silent, columnsChanged) {
-    var requestNo = ++this.requestOrder;
-    this.dispatchExternal("dataLoading", data);
-    if (data && (data.indexOf("{") == 0 || data.indexOf("[") == 0)) {
-      data = JSON.parse(data);
-    }
-    if (this.confirm("data-loading", [data, params, config, silent])) {
-      this.loading = true;
-      if (!silent) {
-        this.alertLoader();
-      }
-      params = this.chain("data-params", [data, config, silent], params || {}, params || {});
-      params = this.mapParams(params, this.table.options.dataSendParams);
-      var result = this.chain("data-load", [data, params, config, silent], false, Promise.resolve([]));
-      return result.then((response) => {
-        if (!Array.isArray(response) && typeof response == "object") {
-          response = this.mapParams(response, this.objectInvert(this.table.options.dataReceiveParams));
-        }
-        var rowData = this.chain("data-loaded", response, null, response);
-        if (requestNo == this.requestOrder) {
-          this.clearAlert();
-          if (rowData !== false) {
-            this.dispatchExternal("dataLoaded", rowData);
-            this.table.rowManager.setData(rowData, replace, typeof columnsChanged === "undefined" ? !replace : columnsChanged);
-          }
-        } else {
-          console.warn("Data Load Response Blocked - An active data load request was blocked by an attempt to change table data while the request was being made");
-        }
-      }).catch((error) => {
-        console.error("Data Load Error: ", error);
-        this.dispatchExternal("dataLoadError", error);
-        if (!silent) {
-          this.alertError();
-        }
-        setTimeout(() => {
-          this.clearAlert();
-        }, this.table.options.dataLoaderErrorTimeout);
-      }).finally(() => {
-        this.loading = false;
-      });
-    } else {
-      this.dispatchExternal("dataLoaded", data);
-      if (!data) {
-        data = [];
-      }
-      this.table.rowManager.setData(data, replace, typeof columnsChanged === "undefined" ? !replace : columnsChanged);
-      return Promise.resolve();
-    }
-  }
-  mapParams(params, map) {
-    var output = {};
-    for (let key in params) {
-      output[map.hasOwnProperty(key) ? map[key] : key] = params[key];
-    }
-    return output;
-  }
-  objectInvert(obj) {
-    var output = {};
-    for (let key in obj) {
-      output[obj[key]] = key;
-    }
-    return output;
-  }
-  blockActiveLoad() {
-    this.requestOrder++;
-  }
-  alertLoader() {
-    var shouldLoad = typeof this.table.options.dataLoader === "function" ? this.table.options.dataLoader() : this.table.options.dataLoader;
-    if (shouldLoad) {
-      this.table.alertManager.alert(this.table.options.dataLoaderLoading || this.langText("data|loading"));
-    }
-  }
-  alertError() {
-    this.table.alertManager.alert(this.table.options.dataLoaderError || this.langText("data|error"), "error");
-  }
-  clearAlert() {
-    this.table.alertManager.clear();
-  }
-}
-
-class ExternalEventBus {
-  constructor(table, optionsList, debug) {
-    this.table = table;
-    this.events = {};
-    this.optionsList = optionsList || {};
-    this.subscriptionNotifiers = {};
-    this.dispatch = debug ? this._debugDispatch.bind(this) : this._dispatch.bind(this);
-    this.debug = debug;
-  }
-  subscriptionChange(key, callback) {
-    if (!this.subscriptionNotifiers[key]) {
-      this.subscriptionNotifiers[key] = [];
-    }
-    this.subscriptionNotifiers[key].push(callback);
-    if (this.subscribed(key)) {
-      this._notifySubscriptionChange(key, true);
-    }
-  }
-  subscribe(key, callback) {
-    if (!this.events[key]) {
-      this.events[key] = [];
-    }
-    this.events[key].push(callback);
-    this._notifySubscriptionChange(key, true);
-  }
-  unsubscribe(key, callback) {
-    var index;
-    if (this.events[key]) {
-      if (callback) {
-        index = this.events[key].findIndex((item) => {
-          return item === callback;
-        });
-        if (index > -1) {
-          this.events[key].splice(index, 1);
-        } else {
-          console.warn("Cannot remove event, no matching event found:", key, callback);
-          return;
-        }
-      } else {
-        delete this.events[key];
-      }
-    } else {
-      console.warn("Cannot remove event, no events set on:", key);
-      return;
-    }
-    this._notifySubscriptionChange(key, false);
-  }
-  subscribed(key) {
-    return this.events[key] && this.events[key].length;
-  }
-  _notifySubscriptionChange(key, subscribed) {
-    var notifiers = this.subscriptionNotifiers[key];
-    if (notifiers) {
-      notifiers.forEach((callback) => {
-        callback(subscribed);
-      });
-    }
-  }
-  _dispatch() {
-    var args = Array.from(arguments), key = args.shift(), result;
-    if (this.events[key]) {
-      this.events[key].forEach((callback, i) => {
-        let callResult = callback.apply(this.table, args);
-        if (!i) {
-          result = callResult;
-        }
-      });
-    }
-    return result;
-  }
-  _debugDispatch() {
-    var args = Array.from(arguments), key = args[0];
-    args[0] = "ExternalEvent:" + args[0];
-    if (this.debug === true || this.debug.includes(key)) {
-      console.log(...args);
-    }
-    return this._dispatch(...arguments);
-  }
-}
-
-class InternalEventBus {
-  constructor(debug) {
-    this.events = {};
-    this.subscriptionNotifiers = {};
-    this.dispatch = debug ? this._debugDispatch.bind(this) : this._dispatch.bind(this);
-    this.chain = debug ? this._debugChain.bind(this) : this._chain.bind(this);
-    this.confirm = debug ? this._debugConfirm.bind(this) : this._confirm.bind(this);
-    this.debug = debug;
-  }
-  subscriptionChange(key, callback) {
-    if (!this.subscriptionNotifiers[key]) {
-      this.subscriptionNotifiers[key] = [];
-    }
-    this.subscriptionNotifiers[key].push(callback);
-    if (this.subscribed(key)) {
-      this._notifySubscriptionChange(key, true);
-    }
-  }
-  subscribe(key, callback, priority = 1e4) {
-    if (!this.events[key]) {
-      this.events[key] = [];
-    }
-    this.events[key].push({ callback, priority });
-    this.events[key].sort((a, b) => {
-      return a.priority - b.priority;
-    });
-    this._notifySubscriptionChange(key, true);
-  }
-  unsubscribe(key, callback) {
-    var index;
-    if (this.events[key]) {
-      if (callback) {
-        index = this.events[key].findIndex((item) => {
-          return item.callback === callback;
-        });
-        if (index > -1) {
-          this.events[key].splice(index, 1);
-        } else {
-          console.warn("Cannot remove event, no matching event found:", key, callback);
-          return;
-        }
-      }
-    } else {
-      console.warn("Cannot remove event, no events set on:", key);
-      return;
-    }
-    this._notifySubscriptionChange(key, false);
-  }
-  subscribed(key) {
-    return this.events[key] && this.events[key].length;
-  }
-  _chain(key, args, initialValue, fallback) {
-    var value = initialValue;
-    if (!Array.isArray(args)) {
-      args = [args];
-    }
-    if (this.subscribed(key)) {
-      this.events[key].forEach((subscriber, i) => {
-        value = subscriber.callback.apply(this, args.concat([value]));
-      });
-      return value;
-    } else {
-      return typeof fallback === "function" ? fallback() : fallback;
-    }
-  }
-  _confirm(key, args) {
-    var confirmed = false;
-    if (!Array.isArray(args)) {
-      args = [args];
-    }
-    if (this.subscribed(key)) {
-      this.events[key].forEach((subscriber, i) => {
-        if (subscriber.callback.apply(this, args)) {
-          confirmed = true;
-        }
-      });
-    }
-    return confirmed;
-  }
-  _notifySubscriptionChange(key, subscribed) {
-    var notifiers = this.subscriptionNotifiers[key];
-    if (notifiers) {
-      notifiers.forEach((callback) => {
-        callback(subscribed);
-      });
-    }
-  }
-  _dispatch() {
-    var args = Array.from(arguments), key = args.shift();
-    if (this.events[key]) {
-      this.events[key].forEach((subscriber) => {
-        subscriber.callback.apply(this, args);
-      });
-    }
-  }
-  _debugDispatch() {
-    var args = Array.from(arguments), key = args[0];
-    args[0] = "InternalEvent:" + key;
-    if (this.debug === true || this.debug.includes(key)) {
-      console.log(...args);
-    }
-    return this._dispatch(...arguments);
-  }
-  _debugChain() {
-    var args = Array.from(arguments), key = args[0];
-    args[0] = "InternalEvent:" + key;
-    if (this.debug === true || this.debug.includes(key)) {
-      console.log(...args);
-    }
-    return this._chain(...arguments);
-  }
-  _debugConfirm() {
-    var args = Array.from(arguments), key = args[0];
-    args[0] = "InternalEvent:" + key;
-    if (this.debug === true || this.debug.includes(key)) {
-      console.log(...args);
-    }
-    return this._confirm(...arguments);
-  }
-}
-
-class TableRegistry {
-  static register(table) {
-    TableRegistry.tables.push(table);
-  }
-  static deregister(table) {
-    var index = TableRegistry.tables.indexOf(table);
-    if (index > -1) {
-      TableRegistry.tables.splice(index, 1);
-    }
-  }
-  static lookupTable(query, silent) {
-    var results = [], matches, match;
-    if (typeof query === "string") {
-      matches = document.querySelectorAll(query);
-      if (matches.length) {
-        for (var i = 0; i < matches.length; i++) {
-          match = TableRegistry.matchElement(matches[i]);
-          if (match) {
-            results.push(match);
-          }
-        }
-      }
-    } else if (typeof HTMLElement !== "undefined" && query instanceof HTMLElement || query instanceof Tabulator) {
-      match = TableRegistry.matchElement(query);
-      if (match) {
-        results.push(match);
-      }
-    } else if (Array.isArray(query)) {
-      query.forEach(function(item) {
-        results = results.concat(TableRegistry.lookupTable(item));
-      });
-    } else {
-      if (!silent) {
-        console.warn("Table Connection Error - Invalid Selector", query);
-      }
-    }
-    return results;
-  }
-  static matchElement(element) {
-    return TableRegistry.tables.find(function(table) {
-      return element instanceof Tabulator ? table === element : table.element === element;
-    });
-  }
-}
-TableRegistry.tables = [];
-
-function fitData(columns, forced) {
-  if (forced) {
-    this.table.columnManager.renderer.reinitializeColumnWidths(columns);
-  }
-  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
-    this.table.modules.responsiveLayout.update();
-  }
-}
-
-function fitDataGeneral(columns, forced) {
-  columns.forEach(function(column) {
-    column.reinitializeWidth();
-  });
-  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
-    this.table.modules.responsiveLayout.update();
-  }
-}
-
-function fitDataStretch(columns, forced) {
-  var colsWidth = 0, tableWidth = this.table.rowManager.element.clientWidth, gap = 0, lastCol = false;
-  columns.forEach((column, i) => {
-    if (!column.widthFixed) {
-      column.reinitializeWidth();
-    }
-    if (this.table.options.responsiveLayout ? column.modules.responsive.visible : column.visible) {
-      lastCol = column;
-    }
-    if (column.visible) {
-      colsWidth += column.getWidth();
-    }
-  });
-  if (lastCol) {
-    gap = tableWidth - colsWidth + lastCol.getWidth();
-    if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
-      lastCol.setWidth(0);
-      this.table.modules.responsiveLayout.update();
-    }
-    if (gap > 0) {
-      lastCol.setWidth(gap);
-    } else {
-      lastCol.reinitializeWidth();
-    }
-  } else {
-    if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
-      this.table.modules.responsiveLayout.update();
-    }
-  }
-}
-
-function fitColumns(columns, forced) {
-  var totalWidth = this.table.rowManager.element.getBoundingClientRect().width;
-  var fixedWidth = 0;
-  var flexWidth = 0;
-  var flexGrowUnits = 0;
-  var flexColWidth = 0;
-  var flexColumns = [];
-  var fixedShrinkColumns = [];
-  var flexShrinkUnits = 0;
-  var overflowWidth = 0;
-  var gapFill = 0;
-  function calcWidth(width) {
-    var colWidth;
-    if (typeof width == "string") {
-      if (width.indexOf("%") > -1) {
-        colWidth = totalWidth / 100 * parseInt(width);
-      } else {
-        colWidth = parseInt(width);
-      }
-    } else {
-      colWidth = width;
-    }
-    return colWidth;
-  }
-  function scaleColumns(columns2, freeSpace, colWidth, shrinkCols) {
-    var oversizeCols = [], oversizeSpace = 0, remainingSpace = 0, nextColWidth = 0, remainingFlexGrowUnits = flexGrowUnits, gap = 0, changeUnits = 0, undersizeCols = [];
-    function calcGrow(col) {
-      return colWidth * (col.column.definition.widthGrow || 1);
-    }
-    function calcShrink(col) {
-      return calcWidth(col.width) - colWidth * (col.column.definition.widthShrink || 0);
-    }
-    columns2.forEach(function(col, i) {
-      var width = shrinkCols ? calcShrink(col) : calcGrow(col);
-      if (col.column.minWidth >= width) {
-        oversizeCols.push(col);
-      } else {
-        if (col.column.maxWidth && col.column.maxWidth < width) {
-          col.width = col.column.maxWidth;
-          freeSpace -= col.column.maxWidth;
-          remainingFlexGrowUnits -= shrinkCols ? col.column.definition.widthShrink || 1 : col.column.definition.widthGrow || 1;
-          if (remainingFlexGrowUnits) {
-            colWidth = Math.floor(freeSpace / remainingFlexGrowUnits);
-          }
-        } else {
-          undersizeCols.push(col);
-          changeUnits += shrinkCols ? col.column.definition.widthShrink || 1 : col.column.definition.widthGrow || 1;
-        }
-      }
-    });
-    if (oversizeCols.length) {
-      oversizeCols.forEach(function(col) {
-        oversizeSpace += shrinkCols ? col.width - col.column.minWidth : col.column.minWidth;
-        col.width = col.column.minWidth;
-      });
-      remainingSpace = freeSpace - oversizeSpace;
-      nextColWidth = changeUnits ? Math.floor(remainingSpace / changeUnits) : remainingSpace;
-      gap = scaleColumns(undersizeCols, remainingSpace, nextColWidth, shrinkCols);
-    } else {
-      gap = changeUnits ? freeSpace - Math.floor(freeSpace / changeUnits) * changeUnits : freeSpace;
-      undersizeCols.forEach(function(column) {
-        column.width = shrinkCols ? calcShrink(column) : calcGrow(column);
-      });
-    }
-    return gap;
-  }
-  if (this.table.options.responsiveLayout && this.table.modExists("responsiveLayout", true)) {
-    this.table.modules.responsiveLayout.update();
-  }
-  if (this.table.rowManager.element.scrollHeight > this.table.rowManager.element.clientHeight) {
-    totalWidth -= this.table.rowManager.element.offsetWidth - this.table.rowManager.element.clientWidth;
-  }
-  columns.forEach(function(column) {
-    var width, minWidth, colWidth;
-    if (column.visible) {
-      width = column.definition.width;
-      minWidth = parseInt(column.minWidth);
-      if (width) {
-        colWidth = calcWidth(width);
-        fixedWidth += colWidth > minWidth ? colWidth : minWidth;
-        if (column.definition.widthShrink) {
-          fixedShrinkColumns.push({
-            column,
-            width: colWidth > minWidth ? colWidth : minWidth
-          });
-          flexShrinkUnits += column.definition.widthShrink;
-        }
-      } else {
-        flexColumns.push({
-          column,
-          width: 0
-        });
-        flexGrowUnits += column.definition.widthGrow || 1;
-      }
-    }
-  });
-  flexWidth = totalWidth - fixedWidth;
-  flexColWidth = Math.floor(flexWidth / flexGrowUnits);
-  gapFill = scaleColumns(flexColumns, flexWidth, flexColWidth, false);
-  if (flexColumns.length && gapFill > 0) {
-    flexColumns[flexColumns.length - 1].width += gapFill;
-  }
-  flexColumns.forEach(function(col) {
-    flexWidth -= col.width;
-  });
-  overflowWidth = Math.abs(gapFill) + flexWidth;
-  if (overflowWidth > 0 && flexShrinkUnits) {
-    gapFill = scaleColumns(fixedShrinkColumns, overflowWidth, Math.floor(overflowWidth / flexShrinkUnits), true);
-  }
-  if (gapFill && fixedShrinkColumns.length) {
-    fixedShrinkColumns[fixedShrinkColumns.length - 1].width -= gapFill;
-  }
-  flexColumns.forEach(function(col) {
-    col.column.setWidth(col.width);
-  });
-  fixedShrinkColumns.forEach(function(col) {
-    col.column.setWidth(col.width);
-  });
-}
-
-var defaultModes = {
-  fitData,
-  fitDataFill: fitDataGeneral,
-  fitDataTable: fitDataGeneral,
-  fitDataStretch,
-  fitColumns
-};
-
-class Layout extends Module {
-  constructor(table) {
-    super(table, "layout");
-    this.mode = null;
-    this.registerTableOption("layout", "fitData");
-    this.registerTableOption("layoutColumnsOnNewData", false);
-    this.registerColumnOption("widthGrow");
-    this.registerColumnOption("widthShrink");
-  }
-  initialize() {
-    var layout = this.table.options.layout;
-    if (Layout.modes[layout]) {
-      this.mode = layout;
-    } else {
-      console.warn("Layout Error - invalid mode set, defaulting to 'fitData' : " + layout);
-      this.mode = "fitData";
-    }
-    this.table.element.setAttribute("tabulator-layout", this.mode);
-  }
-  getMode() {
-    return this.mode;
-  }
-  layout(dataChanged) {
-    this.dispatch("layout-refreshing");
-    Layout.modes[this.mode].call(this, this.table.columnManager.columnsByIndex, dataChanged);
-    this.dispatch("layout-refreshed");
-  }
-}
-Layout.moduleName = "layout";
-Layout.modes = defaultModes;
-
-var defaultLangs = {
-  "default": {
-    "groups": {
-      "item": "item",
-      "items": "items"
-    },
-    "columns": {},
-    "data": {
-      "loading": "Loading",
-      "error": "Error"
-    },
-    "pagination": {
-      "page_size": "Page Size",
-      "page_title": "Show Page",
-      "first": "First",
-      "first_title": "First Page",
-      "last": "Last",
-      "last_title": "Last Page",
-      "prev": "Prev",
-      "prev_title": "Prev Page",
-      "next": "Next",
-      "next_title": "Next Page",
-      "all": "All",
-      "counter": {
-        "showing": "Showing",
-        "of": "of",
-        "rows": "rows",
-        "pages": "pages"
-      }
-    },
-    "headerFilters": {
-      "default": "filter column...",
-      "columns": {}
-    }
-  }
-};
-
-class Localize extends Module {
-  constructor(table) {
-    super(table);
-    this.locale = "default";
-    this.lang = false;
-    this.bindings = {};
-    this.langList = {};
-    this.registerTableOption("locale", false);
-    this.registerTableOption("langs", {});
-  }
-  initialize() {
-    this.langList = Helpers.deepClone(Localize.langs);
-    if (this.table.options.columnDefaults.headerFilterPlaceholder !== false) {
-      this.setHeaderFilterPlaceholder(this.table.options.columnDefaults.headerFilterPlaceholder);
-    }
-    for (let locale in this.table.options.langs) {
-      this.installLang(locale, this.table.options.langs[locale]);
-    }
-    this.setLocale(this.table.options.locale);
-    this.registerTableFunction("setLocale", this.setLocale.bind(this));
-    this.registerTableFunction("getLocale", this.getLocale.bind(this));
-    this.registerTableFunction("getLang", this.getLang.bind(this));
-  }
-  setHeaderFilterPlaceholder(placeholder) {
-    this.langList.default.headerFilters.default = placeholder;
-  }
-  setHeaderFilterColumnPlaceholder(column, placeholder) {
-    this.langList.default.headerFilters.columns[column] = placeholder;
-    if (this.lang && !this.lang.headerFilters.columns[column]) {
-      this.lang.headerFilters.columns[column] = placeholder;
-    }
-  }
-  installLang(locale, lang) {
-    if (this.langList[locale]) {
-      this._setLangProp(this.langList[locale], lang);
-    } else {
-      this.langList[locale] = lang;
-    }
-  }
-  _setLangProp(lang, values) {
-    for (let key in values) {
-      if (lang[key] && typeof lang[key] == "object") {
-        this._setLangProp(lang[key], values[key]);
-      } else {
-        lang[key] = values[key];
-      }
-    }
-  }
-  setLocale(desiredLocale) {
-    desiredLocale = desiredLocale || "default";
-    function traverseLang(trans, path) {
-      for (var prop in trans) {
-        if (typeof trans[prop] == "object") {
-          if (!path[prop]) {
-            path[prop] = {};
-          }
-          traverseLang(trans[prop], path[prop]);
-        } else {
-          path[prop] = trans[prop];
-        }
-      }
-    }
-    if (desiredLocale === true && navigator.language) {
-      desiredLocale = navigator.language.toLowerCase();
-    }
-    if (desiredLocale) {
-      if (!this.langList[desiredLocale]) {
-        let prefix = desiredLocale.split("-")[0];
-        if (this.langList[prefix]) {
-          console.warn("Localization Error - Exact matching locale not found, using closest match: ", desiredLocale, prefix);
-          desiredLocale = prefix;
-        } else {
-          console.warn("Localization Error - Matching locale not found, using default: ", desiredLocale);
-          desiredLocale = "default";
-        }
-      }
-    }
-    this.locale = desiredLocale;
-    this.lang = Helpers.deepClone(this.langList.default || {});
-    if (desiredLocale != "default") {
-      traverseLang(this.langList[desiredLocale], this.lang);
-    }
-    this.dispatchExternal("localized", this.locale, this.lang);
-    this._executeBindings();
-  }
-  getLocale(locale) {
-    return this.locale;
-  }
-  getLang(locale) {
-    return locale ? this.langList[locale] : this.lang;
-  }
-  getText(path, value) {
-    var fillPath = value ? path + "|" + value : path, pathArray = fillPath.split("|"), text = this._getLangElement(pathArray, this.locale);
-    return text || "";
-  }
-  _getLangElement(path, locale) {
-    var root = this.lang;
-    path.forEach(function(level) {
-      var rootPath;
-      if (root) {
-        rootPath = root[level];
-        if (typeof rootPath != "undefined") {
-          root = rootPath;
-        } else {
-          root = false;
-        }
-      }
-    });
-    return root;
-  }
-  bind(path, callback) {
-    if (!this.bindings[path]) {
-      this.bindings[path] = [];
-    }
-    this.bindings[path].push(callback);
-    callback(this.getText(path), this.lang);
-  }
-  _executeBindings() {
-    for (let path in this.bindings) {
-      this.bindings[path].forEach((binding) => {
-        binding(this.getText(path), this.lang);
-      });
-    }
-  }
-}
-Localize.moduleName = "localize";
-Localize.langs = defaultLangs;
-
-class Comms extends Module {
-  constructor(table) {
-    super(table);
-  }
-  initialize() {
-    this.registerTableFunction("tableComms", this.receive.bind(this));
-  }
-  getConnections(selectors) {
-    var connections = [], connection;
-    connection = TableRegistry.lookupTable(selectors);
-    connection.forEach((con) => {
-      if (this.table !== con) {
-        connections.push(con);
-      }
-    });
-    return connections;
-  }
-  send(selectors, module, action, data) {
-    var connections = this.getConnections(selectors);
-    connections.forEach((connection) => {
-      connection.tableComms(this.table.element, module, action, data);
-    });
-    if (!connections.length && selectors) {
-      console.warn("Table Connection Error - No tables matching selector found", selectors);
-    }
-  }
-  receive(table, module, action, data) {
-    if (this.table.modExists(module)) {
-      return this.table.modules[module].commsReceived(table, action, data);
-    } else {
-      console.warn("Inter-table Comms Error - no such module:", module);
-    }
-  }
-}
-Comms.moduleName = "comms";
-
-var coreModules = /*#__PURE__*/Object.freeze({
-  __proto__: null,
-  LayoutModule: Layout,
-  LocalizeModule: Localize,
-  CommsModule: Comms
+  SortModule: Sort
 });
 
 class ModuleBinder {
   constructor(tabulator, modules) {
     this.bindStaticFunctionality(tabulator);
     this.bindModules(tabulator, coreModules, true);
+    this.bindModules(tabulator, enabledModules);
     if (modules) {
       this.bindModules(tabulator, modules);
     }
@@ -15301,7 +11095,7 @@ class Tabulator {
     this.externalEvents = null;
     this.eventBus = null;
     this.interactionMonitor = false;
-    this.browser = "";
+    this.browser = "other";
     this.browserSlow = false;
     this.browserMobile = false;
     this.rtl = false;
@@ -15342,7 +11136,6 @@ class Tabulator {
   initializeCoreSystems(options) {
     this.columnManager = new ColumnManager(this);
     this.rowManager = new RowManager(this);
-    this.footerManager = new FooterManager(this);
     this.dataLoader = new DataLoader(this);
     this.alertManager = new Alert(this);
     this.bindModules();
@@ -15353,7 +11146,6 @@ class Tabulator {
     this.eventBus = new InternalEventBus(this.options.debugEventsInternal);
     this.interactionMonitor = new InteractionManager(this);
     this.dataLoader.initialize();
-    this.footerManager.initialize();
   }
   _mapDeprecatedFunctionality() {
   }
@@ -15421,18 +11213,11 @@ class Tabulator {
     this.interactionMonitor.initialize();
     this.columnManager.initialize();
     this.rowManager.initialize();
-    this._detectBrowser();
     this.modulesCore.forEach((mod) => {
       mod.initialize();
     });
     element.appendChild(this.columnManager.getElement());
     element.appendChild(this.rowManager.getElement());
-    if (options.footerElement) {
-      this.footerManager.activate();
-    }
-    if (options.autoColumns && options.data) {
-      this.columnManager.generateColumnsFromRowData(this.options.data);
-    }
     this.modulesRegular.forEach((mod) => {
       mod.initialize();
     });
@@ -15459,8 +11244,6 @@ class Tabulator {
     this.externalEvents.dispatch("tableDestroyed");
   }
   _detectBrowser() {
-    this.browser = "other";
-    this.browserSlow = false;
     return;
   }
   initGuard(func, msg) {
@@ -15863,100 +11646,4 @@ class Tabulator {
 Tabulator.defaultOptions = defaultOptions;
 new ModuleBinder(Tabulator);
 
-class TabulatorFull extends Tabulator {
-}
-new ModuleBinder(TabulatorFull, modules);
-
-class GroupComponent {
-  constructor(group) {
-    this._group = group;
-    this.type = "GroupComponent";
-    return new Proxy(this, {
-      get: function(target, name, receiver) {
-        if (typeof target[name] !== "undefined") {
-          return target[name];
-        } else {
-          return target._group.groupManager.table.componentFunctionBinder.handle("row", target._group, name);
-        }
-      }
-    });
-  }
-  getKey() {
-    return this._group.key;
-  }
-  getField() {
-    return this._group.field;
-  }
-  getElement() {
-    return this._group.element;
-  }
-  getRows() {
-    return this._group.getRows(true);
-  }
-  getSubGroups() {
-    return this._group.getSubGroups(true);
-  }
-  getParentGroup() {
-    return this._group.parent ? this._group.parent.getComponent() : false;
-  }
-  isVisible() {
-    return this._group.visible;
-  }
-  show() {
-    this._group.show();
-  }
-  hide() {
-    this._group.hide();
-  }
-  toggle() {
-    this._group.toggleVisibility();
-  }
-  _getSelf() {
-    return this._group;
-  }
-  getTable() {
-    return this._group.groupManager.table;
-  }
-}
-
-class PseudoRow {
-  constructor(type) {
-    this.type = type;
-    this.element = this._createElement();
-  }
-  _createElement() {
-    var el = document.createElement("div");
-    el.classList.add("tabulator-row");
-    return el;
-  }
-  getElement() {
-    return this.element;
-  }
-  getComponent() {
-    return false;
-  }
-  getData() {
-    return {};
-  }
-  getHeight() {
-    return this.element.outerHeight;
-  }
-  initialize() {
-  }
-  reinitialize() {
-  }
-  normalizeHeight() {
-  }
-  generateCells() {
-  }
-  reinitializeHeight() {
-  }
-  calcHeight() {
-  }
-  setCellHeight() {
-  }
-  clearCellHeight() {
-  }
-}
-
-export { Accessor as AccessorModule, CalcComponent, CellComponent, Clipboard as ClipboardModule, ColumnCalcs as ColumnCalcsModule, ColumnComponent, Edit as EditModule, Filter as FilterModule, Format as FormatModule, FrozenColumns as FrozenColumnsModule, GroupComponent, History as HistoryModule, Import as ImportModule, Interaction as InteractionModule, Keybindings as KeybindingsModule, Menu as MenuModule, Module, MoveColumns as MoveColumnsModule, MoveRows as MoveRowsModule, Mutator as MutatorModule, Page as PageModule, Persistence as PersistenceModule, Popup as PopupModule, PseudoRow, Renderer, ResizeColumns as ResizeColumnsModule, ResizeRows as ResizeRowsModule, ResizeTable as ResizeTableModule, ResponsiveLayout as ResponsiveLayoutModule, RowComponent, SelectRow as SelectRowModule, Sort as SortModule, TabulatorFull as Tabulator, Tooltip as TooltipModule, Validate as ValidateModule };
+export { Tabulator };

@@ -1,0 +1,1 @@
+pnpm sass src/scss/custom --no-source-map

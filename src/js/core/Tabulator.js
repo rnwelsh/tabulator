@@ -4,7 +4,7 @@ import defaultOptions from './defaults/options.js';
 
 import ColumnManager from './ColumnManager.js';
 import RowManager from './RowManager.js';
-import FooterManager from './FooterManager.js';
+// import FooterManager from './FooterManager.js';
 
 import InteractionMonitor from './tools/InteractionMonitor.js';
 import ComponentFunctionBinder from './tools/ComponentFunctionBinder.js';
@@ -45,7 +45,7 @@ class Tabulator {
     /** track user interaction */
     this.interactionMonitor = false; 
     /** hold current browser type */
-    this.browser = ""; 
+    this.browser = "other"; 
     /** handle reduced functionality for slower browsers */
     this.browserSlow = false; 
     /** check if running on mobile, prevent resize cancelling edit on keyboard appearance */
@@ -108,7 +108,7 @@ class Tabulator {
   initializeCoreSystems(options){
     this.columnManager = new ColumnManager(this);
     this.rowManager = new RowManager(this);
-    this.footerManager = new FooterManager(this);
+    // this.footerManager = new FooterManager(this);
     this.dataLoader = new DataLoader(this);
     this.alertManager = new Alert(this);
     
@@ -128,7 +128,7 @@ class Tabulator {
     this.dataLoader.initialize();
     // this.columnManager.initialize();
     // this.rowManager.initialize();
-    this.footerManager.initialize();
+    // this.footerManager.initialize();
   }
   
   /** convert deprecated functionality to new functions */
@@ -263,7 +263,7 @@ class Tabulator {
     this.columnManager.initialize();
     this.rowManager.initialize();
     
-    this._detectBrowser();
+    // this._detectBrowser();
     
     /** initialize core modules */
     this.modulesCore.forEach((mod) => {
@@ -274,14 +274,14 @@ class Tabulator {
     element.appendChild(this.columnManager.getElement());
     element.appendChild(this.rowManager.getElement());
     
-    if(options.footerElement){
-      this.footerManager.activate();
-    }
+    // if(options.footerElement){
+    //   this.footerManager.activate();
+    // }
     
-    if(options.autoColumns && options.data){
+    // if(options.autoColumns && options.data){
       
-      this.columnManager.generateColumnsFromRowData(this.options.data);
-    }
+    //   this.columnManager.generateColumnsFromRowData(this.options.data);
+    // }
     
     /** initialize regular modules */
     this.modulesRegular.forEach((mod) => {
@@ -324,9 +324,9 @@ class Tabulator {
   }
   
   _detectBrowser(){
-    var ua = navigator.userAgent||navigator.vendor||window.opera;
-    this.browser = "other";
-    this.browserSlow = false;
+    // var ua = navigator.userAgent||navigator.vendor||window.opera;
+    // this.browser = "other";
+    // this.browserSlow = false;
     return
     if(ua.indexOf("Trident") > -1){
       this.browser = "ie";
